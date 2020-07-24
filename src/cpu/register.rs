@@ -7,7 +7,8 @@ pub struct Register {
     pub e: u8,
     pub h: u8,
     pub l: u8,
-    pub program_counter: u16,
+    // 程序计数器
+    pub pc: u16,
     pub stack_pointer: u16,
 }
 
@@ -25,7 +26,7 @@ impl Register {
     }
 
     pub fn set_de(&mut self, value: u16) {
-        self.d = (value >> 8) as u8;get_
+        self.d = (value >> 8) as u8;
         self.e = value as u8;
     }
 
@@ -33,6 +34,4 @@ impl Register {
         self.h = (value >> 8) as u8;
         self.l = value as u8;
     }
-
-
 }
