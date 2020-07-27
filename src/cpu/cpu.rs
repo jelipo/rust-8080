@@ -24,14 +24,26 @@ impl Cpu {
         word
     }
 
+    /// OPCODE: INR
     fn inr_add(&mut self, r: u8) -> u8 {
         let new_r = r.wrapping_add(1);
         self.register.flag_z = new_r == 0;
         self.register.flag_s = (new_r & 0b10000000) != 0;
         self.register.flag_p = r.count_ones() & 0x01 == 0x00;
-        self.register.flag_ac = ;
+        // TODO  self.register.flag_ac =;
         new_r
     }
+
+    /// OPCODE: DCR
+    fn dcr_sub(&mut self, r: u8) -> u8 {
+        let new_r = r.wrapping_sub(1);
+        self.register.flag_z = new_r == 0;
+        self.register.flag_s = (new_r & 0b10000000) != 0;
+        self.register.flag_p = r.count_ones() & 0x01 == 0x00;
+        // TODO  self.register.flag_ac =;
+        new_r
+    }
+
 
     /// 下一步指令
     pub fn next(&mut self) {
@@ -47,17 +59,17 @@ impl Cpu {
             // STAX B       1                      (BC) <- A
             0x02 => self.addring.set_mem(self.register.get_bc(), self.register.a),
             // INX B        1                      BC <- BC+1
-            0x03 => self.register.set_bc(self.register.get_bc() + 1),
+            0x03 => self.register.set_bc(self.register.get_bc().wrapping_add(1)),
             // INR B        1    Z, S, P, AC       B <- B+1
-            0x04 => {
-                self.register.b = self.inr_add(1)
-            }
+            0x04 => self.register.b = self.inr_add(self.register.b),
             // DCR B        1    Z, S, P, AC       B <- B-1
-            0x05 => {}
+            0x05 => self.register.b = self.dcr_sub(self.register.b),
             // MVI B, D8    2                      B <- byte 2
-            0x06 => {}
+            0x06 => self.register.b = self.get_next_byte(),
             // RLC          1    CY                A = A << 1; bit 0 = prev bit 7; CY = prev bit 7
-            0x07 => {}
+            0x07 => {
+
+            }
             // -
             0x08 => {}
             // DAD B        1    CY                HL = HL + BC
@@ -67,11 +79,11 @@ impl Cpu {
             // DCX B        1                      BC = BC-1
             0x0b => {}
             // INR C        1    Z, S, P, AC       C <- C+1
-            0x0c => {}
+            0x0c => self.register.c = self.inr_add(self.register.c),
             // DCR C        1    Z, S, P, AC       C <-C-1
-            0x0d => {}
+            0x0d => self.register.c = self.dcr_sub(self.register.c),
             // MVI C,D8     2                      C <- byte 2
-            0x0e => {}
+            0x0e => self.register.c = self.get_next_byte(),
             // RRC          1    CY                A = A >> 1; bit 7 = prev bit 0; CY = prev bit 0
             0x0f => {}
             // -
@@ -83,11 +95,11 @@ impl Cpu {
             // INX D        1                      DE <- DE + 1
             0x13 => {}
             // INR D        1    Z, S, P, AC       D <- D+1
-            0x14 => {}
+            0x14 => self.register.d = self.inr_add(self.register.d),
             // DCR D        1    Z, S, P, AC       D <- D-1
-            0x15 => {}
+            0x15 => self.register.d = self.dcr_sub(self.register.d),
             // MVI D, D8    2                      D <- byte 2
-            0x16 => {}
+            0x16 => self.register.d = self.get_next_byte(),
             // RAL          1    CY                A = A << 1; bit 0 = prev CY; CY = prev bit 7
             0x17 => {}
             // -
@@ -99,11 +111,11 @@ impl Cpu {
             // DCX D        1                      DE = DE-1
             0x1b => {}
             // INR E        1    Z, S, P, AC       E <-E+1
-            0x1c => {}
+            0x1c => self.register.e = self.inr_add(self.register.e),
             // DCR E        1    Z, S, P, AC       E <- E-1
-            0x1d => {}
+            0x1d => self.register.e = self.dcr_sub(self.register.e),
             // MVI E,D8     2                      E <- byte 2
-            0x1e => {}
+            0x1e => self.register.e = self.get_next_byte(),
             // RAR          1    CY                A = A >> 1; bit 7 = prev bit 7; CY = prev bit 0
             0x1f => {}
             // RIM          1                      special
@@ -115,11 +127,11 @@ impl Cpu {
             // INX H        1                      HL <- HL + 1
             0x23 => {}
             // INR H        1    Z, S, P, AC       H <- H+1
-            0x24 => {}
+            0x24 => self.register.h = self.inr_add(self.register.h),
             // DCR H        1    Z, S, P, AC       H <- H-1
-            0x25 => {}
-            // MVI H,D8     2                      L <- byte 2
-            0x26 => {}
+            0x25 => self.register.h = self.dcr_sub(self.register.h),
+            // MVI H,D8     2                      H <- byte 2
+            0x26 => self.register.h = self.get_next_byte(),
             // DAA          1                      special
             0x27 => {}
             // -
@@ -131,11 +143,11 @@ impl Cpu {
             // DCX H        1                      HL = HL-1
             0x2b => {}
             // INR L        1    Z, S, P, AC       L <- L+1
-            0x2c => {}
+            0x2c => self.register.l = self.inr_add(self.register.l),
             // DCR L        1    Z, S, P, AC       L <- L-1
-            0x2d => {}
+            0x2d => self.register.l = self.dcr_sub(self.register.l),
             // MVI L, D8    2                      L <- byte 2
-            0x2e => {}
+            0x2e => self.register.l = self.get_next_byte(),
             // CMA          1                      A <- !A
             0x2f => {}
             // SIM          1                      special
@@ -147,7 +159,10 @@ impl Cpu {
             // INX SP       1                      SP = SP + 1
             0x33 => {}
             // INR M        1    Z, S, P, AC       (HL) <- (HL)+1
-            0x34 => {}
+            0x34 => {
+                let hl = self.register.get_hl();
+                // TODO self.register.b = self.inr_add(self.register.b)
+            }
             // DCR M        1    Z, S, P, AC       (HL) <- (HL)-1
             0x35 => {}
             // MVI M,D8     2                      (HL) <- byte 2
@@ -163,15 +178,17 @@ impl Cpu {
             // DCX SP       1                       SP = SP-1
             0x3b => {}
             // INR A        1    Z, S, P, AC        A <- A+1
-            0x3c => {}
+            0x3c => self.register.a = self.inr_add(self.register.a),
             // DCR A        1    Z, S, P, AC        A <- A-1
-            0x3d => {}
+            0x3d => self.register.a = self.dcr_sub(self.register.a),
             // MVI A,D8     2                       A <- byte 2
-            0x3e => {}
+            0x3e => self.register.a = self.get_next_byte(),
             // CMC          1    CY                 CY=!CY
             0x3f => {}
             // MOV B,B      1                       B <- B
-            0x40 => {}
+            0x40 => {
+                // TODO ???
+            }
             // MOV B,C      1                       B <- C
             0x41 => {}
             // MOV B,D      1                       B <- D
