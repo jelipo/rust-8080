@@ -1,4 +1,4 @@
-use crate::memory::Memory;
+use crate::memory::{Addressing, Memory, Work};
 
 /// 只读内存
 pub struct ReadOnly {
