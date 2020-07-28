@@ -10,6 +10,7 @@ struct Cpu {
     addring: dyn Addressing,
 }
 
+
 impl Cpu {
     fn get_next_byte(&mut self) -> u8 {
         let byte = self.addring.get_mem(self.register.pc);
