@@ -8,10 +8,9 @@ mod cpu;
 mod memory;
 
 fn main() -> io::Result<()> {
-    let mut a: u8 = 0xFA;
-    for i in 0..10 {
-        a = a.wrapping_add(1);
-        let b = 0;
-    }
+    let a: u8 = 0x70;
+    let new_a: u8 = a.wrapping_sub(0x71);
+
+    println!("result:{:X} 借位 {}", new_a, a < new_a);
     Ok(())
 }
