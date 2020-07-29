@@ -15,8 +15,8 @@ impl Addressing for SpaceInvadersAddressing {
         match addr {
             0x0000..=0x07ff => self.read_only_h.get(addr),
             0x0800..=0x0fff => self.read_only_g.get(addr),
-            0x1000..=0x17ff => self.read_only_h.get(addr),
-            0x1800..=0x1fff => self.read_only_h.get(addr),
+            0x1000..=0x17ff => self.read_only_f.get(addr),
+            0x1800..=0x1fff => self.read_only_e.get(addr),
             0x2000..=0x23ff => self.work_ram.get(addr),
             0x2400..=0x3fff => self.video_ram.get(addr),
             _ => panic!("address not support")
@@ -24,11 +24,13 @@ impl Addressing for SpaceInvadersAddressing {
     }
 
     fn set_mem(&mut self, addr: u16, val: u8) {
+        //println!("{:X} 设置 {:X}", addr, val);
+
         match addr {
             0x0000..=0x07ff => self.read_only_h.set(addr, val),
             0x0800..=0x0fff => self.read_only_g.set(addr, val),
-            0x1000..=0x17ff => self.read_only_h.set(addr, val),
-            0x1800..=0x1fff => self.read_only_h.set(addr, val),
+            0x1000..=0x17ff => self.read_only_f.set(addr, val),
+            0x1800..=0x1fff => self.read_only_e.set(addr, val),
             0x2000..=0x23ff => self.work_ram.set(addr, val),
             0x2400..=0x3fff => self.video_ram.set(addr, val),
             _ => panic!("address not support")
@@ -37,10 +39,10 @@ impl Addressing for SpaceInvadersAddressing {
 }
 
 impl SpaceInvadersAddressing {
-    fn new(h_arr: Box<[u8; 2048]>,
-           g_arr: Box<[u8; 2048]>,
-           f_arr: Box<[u8; 2048]>,
-           e_arr: Box<[u8; 2048]>,
+    pub fn new(h_arr: Box<[u8; 2048]>,
+               g_arr: Box<[u8; 2048]>,
+               f_arr: Box<[u8; 2048]>,
+               e_arr: Box<[u8; 2048]>,
     ) -> Self {
         Self {
             read_only_h: ReadOnly::init(0, h_arr),

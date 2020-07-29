@@ -26,6 +26,10 @@ pub struct Register {
 }
 
 impl Register {
+    pub fn get_af(&self) -> u16 {
+        (self.a as u16) << 8 | (self.get_flags() as u16)
+    }
+
     pub fn get_bc(&self) -> u16 { (self.b as u16) << 8 | (self.c as u16) }
 
     pub fn get_de(&self) -> u16 { (self.d as u16) << 8 | (self.e as u16) }
@@ -48,5 +52,16 @@ impl Register {
     pub fn set_hl(&mut self, value: u16) {
         self.h = (value >> 8) as u8;
         self.l = value as u8;
+    }
+
+    pub fn get_flags(&self) -> u8 {
+        // S:7  Z:6  A:4  P:2  C:0
+        let mut flags = 0b0000_0000;
+        flags = flags | u8::from(self.flag_s) << 7;
+        flags = flags | u8::from(self.flag_z) << 6;
+        flags = flags | u8::from(self.flag_ac) << 4;
+        flags = flags | u8::from(self.flag_p) << 2;
+        flags = flags | u8::from(self.flag_cy);
+        flags
     }
 }
