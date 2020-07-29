@@ -113,13 +113,14 @@ impl Cpu {
         self.register.flag_s = (new_a & 0b10000000) != 0;
         self.register.flag_p = new_a.count_ones() & 0x01 == 0x00;
         self.register.flag_cy = old_a < new_a;
-        // TODO self.register.flag_ac =;
+        self.register.flag_ac = (old_a as i8 & 0x0f) - (r as i8 & 0x0f) >= 0x00;
         self.register.a = new_a
     }
 
     ///
     /// example : SBB B        1    Z, S, P, CY, AC    A <- A - B - CY
     fn sbb(&mut self, r: u8) {
+        let c = u8::from(self.register.flag_cy);
         let old_a = self.register.a;
         let old_cy = u8::from(self.register.flag_cy);
         let new_a = old_a.wrapping_sub(r).wrapping_sub(old_cy);
@@ -127,7 +128,7 @@ impl Cpu {
         self.register.flag_s = (new_a & 0b10000000) != 0;
         self.register.flag_p = new_a.count_ones() & 0x01 == 0x00;
         self.register.flag_cy = u16::from(old_a) < (u16::from(r) + u16::from(old_cy));
-        // TODO self.register.flag_ac =;
+        self.register.flag_ac = (old_a as i8 & 0x0f) - (r as i8 & 0x0f) - (c as i8) >= 0x00;
         self.register.a = new_a;
     }
 
@@ -139,7 +140,7 @@ impl Cpu {
         self.register.flag_s = (new_a & 0b10000000) != 0;
         self.register.flag_p = new_a.count_ones() & 0x01 == 0x00;
         self.register.flag_cy = false;
-        // TODO self.register.flag_ac =;
+        self.register.flag_ac = ((self.register.a | r) & 0x08) != 0;
         self.register.a = new_a;
     }
 
@@ -151,7 +152,7 @@ impl Cpu {
         self.register.flag_s = (new_a & 0b10000000) != 0;
         self.register.flag_p = new_a.count_ones() & 0x01 == 0x00;
         self.register.flag_cy = false;
-        // TODO self.register.flag_ac =;
+        self.register.flag_ac = false;
         self.register.a = new_a;
     }
 
@@ -163,7 +164,7 @@ impl Cpu {
         self.register.flag_s = (new_a & 0b10000000) != 0;
         self.register.flag_p = new_a.count_ones() & 0x01 == 0x00;
         self.register.flag_cy = false;
-        // TODO self.register.flag_ac =;
+        self.register.flag_ac = false;
         self.register.a = new_a;
     }
 
@@ -182,7 +183,7 @@ impl Cpu {
         // self.register.flag_s = (new_a & 0b10000000) != 0;
         // self.register.flag_p = new_a.count_ones() & 0x01 == 0x00;
         // self.register.flag_cy = old_a < new_a;
-        // TODO self.register.flag_ac =;
+        // self.register.flag_ac =;
     }
 
     /// Add value to Stack
@@ -345,6 +346,7 @@ impl Cpu {
             0x26 => self.register.h = self.get_next_byte(),
             // DAA          1                      special
             0x27 => {
+                eprintln!("未实现 {:#04X}", op_code);
                 // TODO
             }
             // -
@@ -850,6 +852,7 @@ impl Cpu {
             0xf1 => {
                 let value = self.stack_pop();
                 let x = value.to_le_bytes();
+                eprintln!("未实现 {:#04X}", op_code);
                 // TODO
             }
             // JP adr       3                       if P=1 PC <- adr
@@ -865,6 +868,7 @@ impl Cpu {
                 self.addring.set_mem(self.register.sp - 2, flags);
                 self.addring.set_mem(self.register.sp - 1, self.register.a);
                 self.register.sp -= 2;
+                eprintln!("未实现 {:#04X}", op_code);
                 // TODO
             }
             // ORI D8       2    Z, S, P, CY, AC    A <- A | data
