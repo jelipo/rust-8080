@@ -2,7 +2,7 @@ use std::fs::File;
 use std::io;
 use std::io::Read;
 
-use crate::cpu::Cpu;
+use crate::cpu::{Cpu, Register};
 use crate::memory::SpaceInvadersAddressing;
 
 mod util;
@@ -32,15 +32,17 @@ fn main() -> io::Result<()> {
     let mut cpu = Cpu::new(Box::new(addressing));
     println!("   no        op       af      bc      de      hl      pc      sp  ");
     let mut op_code = 0;
-    let times = 9229;
-    for i in 0..times {
+    let times = 0042435;
+    // for i in 0..times {
+    //     op_code = cpu.next();
+    //     if times - i < 100 {
+    //         println!("{:07}:    {:#04X}     {:04X}    {:04X}    {:04X}    {:04X}    {:04X}    {:04X}",
+    //                  i + 1, op_code, cpu.register.get_af(), cpu.register.get_bc(), cpu.register.get_de(),
+    //                  cpu.register.get_hl(), cpu.register.pc, cpu.register.sp);
+    //     }
+    // }
+    loop {
         op_code = cpu.next();
-        if times - i < 10 {
-            println!("{:07}:    {:#04X}     {:04X}    {:04X}    {:04X}    {:04X}    {:04X}    {:04X}",
-                     i + 1, op_code, cpu.register.get_af(), cpu.register.get_bc(), cpu.register.get_de(),
-                     cpu.register.get_hl(), cpu.register.pc, cpu.register.sp);
-        }
     }
-
     Ok(())
 }

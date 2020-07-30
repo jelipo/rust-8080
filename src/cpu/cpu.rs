@@ -66,8 +66,8 @@ impl Cpu {
         let new_r = r.wrapping_sub(1);
         self.register.flag_z = new_r == 0;
         self.register.flag_s = (new_r & 0b10000000) != 0;
-        self.register.flag_p = new_r.count_ones() & 0x01 == 0x00;
-        self.register.flag_ac = (new_r & 0x0f) != 0x0f;
+        self.register.flag_p = new_r.count_ones() % 2 == 0x00;
+        self.register.flag_ac = new_r > 0xf;
         new_r
     }
 
@@ -140,7 +140,7 @@ impl Cpu {
         self.register.flag_s = (new_a & 0b10000000) != 0;
         self.register.flag_p = new_a.count_ones() & 0x01 == 0x00;
         self.register.flag_cy = false;
-        self.register.flag_ac = ((self.register.a | r) & 0x08) != 0;
+        self.register.flag_ac = ((self.register.a & r) & 0x08) != 0;
         self.register.a = new_a;
     }
 
@@ -689,7 +689,9 @@ impl Cpu {
                 self.register.set_bc(value);
             }
             // JNZ adr      3                       if NZ, PC <- adr
-            0xc2 => self.condition_jmp(!self.register.flag_z),
+            0xc2 => {
+                self.condition_jmp(!self.register.flag_z);
+            }
             // JMP adr      3                       PC <= adr
             0xc3 => self.register.pc = self.get_next_word(),
             // CNZ adr      3                       if NZ, CALL adr
@@ -724,7 +726,7 @@ impl Cpu {
                 // TODO
             }
             // CZ adr       3                       if Z, CALL adr
-            0xcc => self.condition_jmp(self.register.flag_z),
+            0xcc => self.condition_call(self.register.flag_z),
             // CALL adr     3                       (SP-1)<-PC.hi;(SP-2)<-PC.lo;SP<-SP+2;PC=adr
             // push stack ,then JMP
             0xcd => self.call(),
@@ -851,7 +853,8 @@ impl Cpu {
             // POP PSW      1                       flags <- (sp); A <- (sp+1); sp <- sp+2
             0xf1 => {
                 let value = self.stack_pop();
-                let x = value.to_le_bytes();
+                self.register.a = ((value >> 8) as u8);
+                self.register.set_flags((value & 0x00d5 | 0x0002) as u8);
                 eprintln!("未实现 {:#04X}", op_code);
                 // TODO
             }
@@ -868,8 +871,6 @@ impl Cpu {
                 self.addring.set_mem(self.register.sp - 2, flags);
                 self.addring.set_mem(self.register.sp - 1, self.register.a);
                 self.register.sp -= 2;
-                eprintln!("未实现 {:#04X}", op_code);
-                // TODO
             }
             // ORI D8       2    Z, S, P, CY, AC    A <- A | data
             0xf6 => {

@@ -64,4 +64,13 @@ impl Register {
         flags = flags | u8::from(self.flag_cy);
         flags
     }
+
+    pub fn set_flags(&mut self, flags: u8) {
+        // S:7  Z:6  A:4  P:2  C:0
+        self.flag_s = flags & 0b1000_0000 != 0;
+        self.flag_z = flags & 0b0100_0000 != 0;
+        self.flag_ac = flags & 0b0001_0000 != 0;
+        self.flag_p = flags & 0b0000_0100 != 0;
+        self.flag_cy = flags & 0b0000_0001 != 0;
+    }
 }

@@ -12,7 +12,7 @@ pub struct SpaceInvadersAddressing {
 
 impl Addressing for SpaceInvadersAddressing {
     fn get_mem(&self, addr: u16) -> u8 {
-        match addr {
+        let value = match addr {
             0x0000..=0x07ff => self.read_only_h.get(addr),
             0x0800..=0x0fff => self.read_only_g.get(addr),
             0x1000..=0x17ff => self.read_only_f.get(addr),
@@ -20,12 +20,11 @@ impl Addressing for SpaceInvadersAddressing {
             0x2000..=0x23ff => self.work_ram.get(addr),
             0x2400..=0x3fff => self.video_ram.get(addr),
             _ => panic!("address not support")
-        }
+        };
+        value
     }
 
     fn set_mem(&mut self, addr: u16, val: u8) {
-        //println!("{:X} 设置 {:X}", addr, val);
-
         match addr {
             0x0000..=0x07ff => self.read_only_h.set(addr, val),
             0x0800..=0x0fff => self.read_only_g.set(addr, val),
