@@ -1,16 +1,95 @@
+use std::borrow::Borrow;
 use std::fs::File;
 use std::io;
 use std::io::Read;
+use std::sync::{Arc, RwLock};
+use std::time::Duration;
+
+use minifb::{Key, Window, WindowOptions};
 
 use crate::cpu::{Cpu, Register};
-use crate::memory::SpaceInvadersAddressing;
+use crate::memory::{Addressing, SpaceInvadersAddressing};
 
 mod util;
 
 mod cpu;
 mod memory;
 
-fn main() -> io::Result<()> {
+const WIDTH: usize = 256;
+const HEIGHT: usize = 224;
+
+fn main() {
+    let video_arr = Arc::new(RwLock::new([0u8; 7168]));
+    let addressing = init_address(video_arr.clone()).unwrap();
+    let mut cpu = Cpu::new(Box::new(addressing));
+    let handle = std::thread::spawn(move || {
+        loop {
+            cpu.next();
+        }
+    });
+    std::thread::sleep(Duration::from_secs(2));
+    let mut buffer: Vec<u32> = vec![0; WIDTH * HEIGHT];
+
+    let mut window = Window::new(
+        "Test - ESC to exit",
+        WIDTH,
+        HEIGHT,
+        WindowOptions::default(),
+    )
+        .unwrap_or_else(|e| {
+            panic!("{}", e);
+        });
+
+    // 限制最高60帧
+    window.limit_update_rate(Some(std::time::Duration::from_micros(16600)));
+
+    while window.is_open() && !window.is_key_down(Key::Escape) {
+        let arc = video_arr.clone();
+        let video_ram = arc.read().unwrap();
+        for i in 0..buffer.len() {
+            let line = i / 8;
+            if (i % 8) != 0 {
+                continue;
+            }
+            let byte = video_ram[line as usize];
+            buffer[i] = get_color(byte & 0b0000_0001);
+            buffer[i + 1] = get_color(byte & 0b0000_0010);
+            buffer[i + 2] = get_color(byte & 0b0000_0100);
+            buffer[i + 3] = get_color(byte & 0b0000_1000);
+            buffer[i + 4] = get_color(byte & 0b0001_0000);
+            buffer[i + 5] = get_color(byte & 0b0010_0000);
+            buffer[i + 6] = get_color(byte & 0b0100_0000);
+            buffer[i + 7] = get_color(byte & 0b1000_0000);
+        }
+
+        // We unwrap here as we want this code to exit if it fails. Real applications may want to handle this in a different way
+        window
+            .update_with_buffer(&buffer, WIDTH, HEIGHT)
+            .unwrap();
+    }
+}
+
+fn get_color(bit: u8) -> u32 {
+    return if bit == 0 { 0 } else { u32::max_value() };
+}
+
+fn cpu_debug(mut cpu: Cpu) -> io::Result<()> {
+    println!("   no        op       af      bc      de      hl      pc      sp  ");
+    let mut op_code = 0;
+    let times = 0042435;
+    for i in 0..times {
+        op_code = cpu.next();
+        if times - i < 100 {
+            println!("{:07}:    {:#04X}     {:04X}    {:04X}    {:04X}    {:04X}    {:04X}    {:04X}",
+                     i + 1, op_code, cpu.register.get_af(), cpu.register.get_bc(), cpu.register.get_de(),
+                     cpu.register.get_hl(), cpu.register.pc, cpu.register.sp);
+        }
+    }
+
+    Ok(())
+}
+
+fn init_address(video_arr: Arc<RwLock<[u8; 7168]>>) -> io::Result<SpaceInvadersAddressing> {
     let mut arr_h = [0u8; 2048];
     let mut h = File::open("C:/Users/cao/Desktop/invaders/invaders.h")?;
     let h_size = h.read(&mut arr_h)?;
@@ -28,21 +107,6 @@ fn main() -> io::Result<()> {
     let e_size = e.read(&mut arr_e)?;
 
     let addressing = SpaceInvadersAddressing::new(
-        Box::new(arr_h), Box::new(arr_g), Box::new(arr_f), Box::new(arr_e));
-    let mut cpu = Cpu::new(Box::new(addressing));
-    println!("   no        op       af      bc      de      hl      pc      sp  ");
-    let mut op_code = 0;
-    let times = 0042435;
-    // for i in 0..times {
-    //     op_code = cpu.next();
-    //     if times - i < 100 {
-    //         println!("{:07}:    {:#04X}     {:04X}    {:04X}    {:04X}    {:04X}    {:04X}    {:04X}",
-    //                  i + 1, op_code, cpu.register.get_af(), cpu.register.get_bc(), cpu.register.get_de(),
-    //                  cpu.register.get_hl(), cpu.register.pc, cpu.register.sp);
-    //     }
-    // }
-    loop {
-        op_code = cpu.next();
-    }
-    Ok(())
+        Box::new(arr_h), Box::new(arr_g), Box::new(arr_f), Box::new(arr_e), video_arr);
+    Ok(addressing)
 }

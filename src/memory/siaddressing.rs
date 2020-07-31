@@ -1,3 +1,5 @@
+use std::sync::{Arc, Mutex, RwLock};
+
 use crate::memory::{Addressing, Memory, ReadOnly, Video, Work};
 
 pub struct SpaceInvadersAddressing {
@@ -6,7 +8,7 @@ pub struct SpaceInvadersAddressing {
     read_only_f: ReadOnly,
     read_only_e: ReadOnly,
     work_ram: Work,
-    video_ram: Video,
+    pub video_ram: Video,
 }
 
 
@@ -42,6 +44,7 @@ impl SpaceInvadersAddressing {
                g_arr: Box<[u8; 2048]>,
                f_arr: Box<[u8; 2048]>,
                e_arr: Box<[u8; 2048]>,
+               video_arr: Arc<RwLock<[u8; 7168]>>,
     ) -> Self {
         Self {
             read_only_h: ReadOnly::init(0, h_arr),
@@ -49,7 +52,7 @@ impl SpaceInvadersAddressing {
             read_only_f: ReadOnly::init(0x1000, f_arr),
             read_only_e: ReadOnly::init(0x1800, e_arr),
             work_ram: Work::init(0x2000, Box::new([0u8; 1024])),
-            video_ram: Video::init(0x2400, Box::new([0u8; 7168])),
+            video_ram: Video::init(0x2400, video_arr),
         }
     }
 }

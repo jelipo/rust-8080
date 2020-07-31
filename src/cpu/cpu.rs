@@ -4,17 +4,19 @@ use std::ops::Sub;
 
 use crate::cpu::register::Register;
 use crate::memory::address::Addressing;
+use crate::memory::SpaceInvadersAddressing;
 use crate::util::U16Util;
+use std::sync::Arc;
 
 /// Abstraction of Intel 8080
 pub struct Cpu {
     pub register: Register,
-    addring: Box<dyn Addressing>,
+    pub addring: Box<SpaceInvadersAddressing>,
     interrupt: bool,
 }
 
 impl Cpu {
-    pub fn new(addring: Box<dyn Addressing>) -> Self {
+    pub fn new(addring: Box<SpaceInvadersAddressing>) -> Self {
         let register = Register {
             a: 0,
             b: 0,
@@ -220,6 +222,11 @@ impl Cpu {
         let word = self.get_next_word();
         self.stack_add(self.register.pc);
         self.register.pc = word;
+    }
+
+    fn rst(&mut self, opcode: u8) {
+        self.stack_add(self.register.pc);
+        self.register.pc = u16::from(opcode & 0x38);
     }
 
 
@@ -710,10 +717,7 @@ impl Cpu {
                 self.add(data);
             }
             // RST 0        1                       CALL $0
-            0xc7 => {
-                eprintln!("未实现 {:#04X}", op_code);
-                // TODO
-            }
+            0xc7 => self.rst(op_code),
             // RZ           1                       if Z, RET
             0xc8 => if self.register.flag_z { self.register.pc = self.stack_pop(); },
             // RET          1                       PC.lo <- (sp); PC.hi<-(sp+1); SP <- SP+2
@@ -736,10 +740,7 @@ impl Cpu {
                 self.adc(data);
             }
             // RST 1        1                       CALL $8
-            0xcf => {
-                eprintln!("未实现 {:#04X}", op_code);
-                // TODO
-            }
+            0xcf => self.rst(op_code),
             // RNC          1                       if NCY, RET
             0xd0 => if !self.register.flag_cy { self.register.pc = self.stack_pop(); },
             // POP D        1                       E <- (sp); D <- (sp+1); sp <- sp+2
@@ -763,10 +764,7 @@ impl Cpu {
                 self.sub(data);
             }
             // RST 2        1                       CALL $10
-            0xd7 => {
-                eprintln!("未实现 {:#04X}", op_code);
-                // TODO
-            }
+            0xd7 => self.rst(op_code),
             // RC           1                       if CY, RET
             0xd8 => if self.register.flag_cy { self.register.pc = self.stack_pop(); },
             // - 0xC9
@@ -787,10 +785,7 @@ impl Cpu {
                 self.sbb(data);
             }
             // RST 3        1                       CALL $18
-            0xdf => {
-                eprintln!("未实现 {:#04X}", op_code);
-                // TODO
-            }
+            0xdf => self.rst(op_code),
             // RPO          1                       if PO, RET
             0xe0 => if !self.register.flag_p { self.register.pc = self.stack_pop(); },
             // POP H        1                       L <- (sp); H <- (sp+1); sp <- sp+2
@@ -819,10 +814,7 @@ impl Cpu {
                 self.ana(data);
             }
             // RST 4        1                       CALL $20
-            0xe7 => {
-                eprintln!("未实现 {:#04X}", op_code);
-                // TODO
-            }
+            0xe7 => self.rst(op_code),
             // RPE          1                       if PE, RET
             0xe8 => if self.register.flag_p { self.register.pc = self.stack_pop(); },
             // PCHL         1                       PC.hi <- H; PC.lo <- L
@@ -844,10 +836,7 @@ impl Cpu {
                 self.xra(data);
             }
             // RST 5        1                       CALL $28
-            0xef => {
-                eprintln!("未实现 {:#04X}", op_code);
-                // TODO
-            }
+            0xef => self.rst(op_code),
             // RP           1                       if P, RET
             0xf0 => if !self.register.flag_s { self.register.pc = self.stack_pop(); },
             // POP PSW      1                       flags <- (sp); A <- (sp+1); sp <- sp+2
@@ -878,10 +867,7 @@ impl Cpu {
                 self.ora(data);
             }
             // RST 6        1                       CALL $30
-            0xf7 => {
-                eprintln!("未实现 {:#04X}", op_code);
-                // TODO
-            }
+            0xf7 => self.rst(op_code),
             // RM           1                       if M, RET
             0xf8 => if self.register.flag_s { self.register.pc = self.stack_pop(); },
             // SPHL         1                       SP=HL
@@ -900,10 +886,7 @@ impl Cpu {
                 self.cmp(data);
             }
             // RST 7        1                       CALL $38
-            0xff => {
-                eprintln!("未实现 {:#04X}", op_code);
-                // TODO
-            }
+            0xff => self.rst(op_code),
             //
             _ => println!("unknow opcode 0x{:X}", op_code)
             //
