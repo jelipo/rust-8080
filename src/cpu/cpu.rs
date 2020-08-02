@@ -850,7 +850,10 @@ impl Cpu {
             // JP adr       3                       if P=1 PC <- adr
             0xf2 => self.condition_jmp(self.register.flag_s),
             // DI           1                       special
-            0xf3 => self.interrupt = false,
+            0xf3 => {
+                println!("关闭中断");
+                self.interrupt = false
+            }
             // CP adr       3                       if P, PC <- adr    Call if  Plus
             0xf4 => self.condition_call(!self.register.flag_s),
             // PUSH PSW     1                       (sp-2)<-flags; (sp-1)<-A; sp <- sp - 2
@@ -875,7 +878,10 @@ impl Cpu {
             // JM adr       3                       if M, PC <- adr
             0xfa => self.condition_jmp(self.register.flag_s),
             // EI           1                       special
-            0xfb => self.interrupt = true,
+            0xfb => {
+                println!("开启中断");
+                self.interrupt = true
+            }
             // CM adr       3                       if M, CALL adr   Call If Minus
             0xfc => self.condition_call(self.register.flag_s),
             // -

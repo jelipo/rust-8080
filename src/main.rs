@@ -73,7 +73,7 @@ fn get_color(bit: u8) -> u32 {
     return if bit == 0 { 0 } else { u32::max_value() };
 }
 
-fn cpu_debug(mut cpu: Cpu) -> io::Result<()> {
+fn cpu_debug(cpu: &mut Cpu) -> io::Result<()> {
     println!("   no        op       af      bc      de      hl      pc      sp  ");
     let mut op_code = 0;
     let times = 0042435;
