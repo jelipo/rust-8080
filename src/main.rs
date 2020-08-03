@@ -22,12 +22,9 @@ fn main() {
     let video_arr = Arc::new(RwLock::new([0u8; 7168]));
     let addressing = init_address(video_arr.clone()).unwrap();
     let mut cpu = Cpu::new(Box::new(addressing));
-    let handle = std::thread::spawn(move || {
-        loop {
-            cpu.next();
-        }
-    });
-    std::thread::sleep(Duration::from_secs(2));
+    let mut cpu_borrow = cpu.borrow();
+
+    //std::thread::sleep(Duration::from_secs(2));
     let mut buffer: Vec<u32> = vec![0; WIDTH * HEIGHT];
 
     let mut window = Window::new(
@@ -35,37 +32,25 @@ fn main() {
         WIDTH,
         HEIGHT,
         WindowOptions::default(),
-    )
-        .unwrap_or_else(|e| {
-            panic!("{}", e);
-        });
+    ).unwrap_or_else(|e| {
+        panic!("{}", e);
+    });
 
     // 限制最高60帧
     window.limit_update_rate(Some(std::time::Duration::from_micros(16600)));
 
+    let mut int_num: bool = false;
     while window.is_open() && !window.is_key_down(Key::Escape) {
-        let arc = video_arr.clone();
-        let video_ram = arc.read().unwrap();
-        for i in 0..buffer.len() {
-            let line = i / 8;
-            if (i % 8) != 0 {
-                continue;
-            }
-            let byte = video_ram[line as usize];
-            buffer[i] = get_color(byte & 0b0000_0001);
-            buffer[i + 1] = get_color(byte & 0b0000_0010);
-            buffer[i + 2] = get_color(byte & 0b0000_0100);
-            buffer[i + 3] = get_color(byte & 0b0000_1000);
-            buffer[i + 4] = get_color(byte & 0b0001_0000);
-            buffer[i + 5] = get_color(byte & 0b0010_0000);
-            buffer[i + 6] = get_color(byte & 0b0100_0000);
-            buffer[i + 7] = get_color(byte & 0b1000_0000);
+        for i in 0..1000000 {
+            cpu.next();
         }
-
-        // We unwrap here as we want this code to exit if it fails. Real applications may want to handle this in a different way
-        window
-            .update_with_buffer(&buffer, WIDTH, HEIGHT)
-            .unwrap();
+        cpu.interrupt(if int_num { 0x10 } else { 0x08 });
+        int_num = !int_num;
+        for i in 0..1000000 {
+            cpu.next();
+        }
+        test(&mut buffer, &video_arr);
+        window.update_with_buffer(&buffer, WIDTH, HEIGHT).unwrap();
     }
 }
 
@@ -76,7 +61,7 @@ fn get_color(bit: u8) -> u32 {
 fn cpu_debug(cpu: &mut Cpu) -> io::Result<()> {
     println!("   no        op       af      bc      de      hl      pc      sp  ");
     let mut op_code = 0;
-    let times = 0042435;
+    let times = 0042050;
     for i in 0..times {
         op_code = cpu.next();
         if times - i < 100 {
@@ -109,4 +94,24 @@ fn init_address(video_arr: Arc<RwLock<[u8; 7168]>>) -> io::Result<SpaceInvadersA
     let addressing = SpaceInvadersAddressing::new(
         Box::new(arr_h), Box::new(arr_g), Box::new(arr_f), Box::new(arr_e), video_arr);
     Ok(addressing)
+}
+
+fn test(buffer: &mut Vec<u32>, video_arr: &Arc<RwLock<[u8; 7168]>>) {
+    let arc = video_arr.clone();
+    let video_ram = arc.read().unwrap();
+    for i in 0..buffer.len() {
+        let line = i / 8;
+        if (i % 8) != 0 {
+            continue;
+        }
+        let byte = video_ram[line as usize];
+        buffer[i] = get_color(byte & 0b0000_0001);
+        buffer[i + 1] = get_color(byte & 0b0000_0010);
+        buffer[i + 2] = get_color(byte & 0b0000_0100);
+        buffer[i + 3] = get_color(byte & 0b0000_1000);
+        buffer[i + 4] = get_color(byte & 0b0001_0000);
+        buffer[i + 5] = get_color(byte & 0b0010_0000);
+        buffer[i + 6] = get_color(byte & 0b0100_0000);
+        buffer[i + 7] = get_color(byte & 0b1000_0000);
+    }
 }

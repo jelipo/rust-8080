@@ -2,9 +2,11 @@ use std::sync::{Arc, Mutex, RwLock};
 
 use crate::memory::Memory;
 
+const RAM_SIZE: usize = 7168;
+
 // Video RAM
 pub struct Video {
-    data: Arc<RwLock<[u8; 7168]>>,
+    pub data: Arc<RwLock<[u8; RAM_SIZE]>>,
     /// 地址偏移量
     ofs: u16,
 }
@@ -19,7 +21,8 @@ impl Memory for Video {
         if addr == 0x3DE1 {
             let a = 0;
         }
-        self.data.write().unwrap()[(addr - self.ofs) as usize] = val
+        let mut write = self.data.write().unwrap();
+        write[(addr - self.ofs) as usize] = val
     }
 }
 

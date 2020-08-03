@@ -1,12 +1,12 @@
 use std::borrow::Borrow;
 use std::mem;
 use std::ops::Sub;
+use std::sync::Arc;
 
 use crate::cpu::register::Register;
 use crate::memory::address::Addressing;
 use crate::memory::SpaceInvadersAddressing;
 use crate::util::U16Util;
-use std::sync::Arc;
 
 /// Abstraction of Intel 8080
 pub struct Cpu {
@@ -259,7 +259,10 @@ impl Cpu {
                 self.register.flag_ac = bit_7 != 0;
             }
             // -
-            0x08 => { /* Nothing */ }
+            0x08 => {
+                eprintln!("未实现 {:#04X}", op_code);
+                /* Nothing */
+            }
             // DAD B        1    CY                HL = HL + BC
             0x09 => self.dad_add(self.register.get_bc()),
             // LDAX B       1                      A <- (BC)
@@ -281,7 +284,10 @@ impl Cpu {
                 self.register.flag_cy = bit_7 != 0;
             }
             // -
-            0x10 => { /* Nothing */ }
+            0x10 => {
+                eprintln!("未实现 {:#04X}", op_code);
+                /* Nothing */
+            }
             // LXI D,D16    3                      D <- byte 3, E <- byte 2
             0x11 => {
                 let word = self.get_next_word();
@@ -773,6 +779,7 @@ impl Cpu {
             0xda => self.condition_jmp(self.register.flag_cy),
             // IN D8        2                       special
             0xdb => {
+                println!("0xdb");
                 let byte = self.get_next_byte();
             }
             // CC adr       3                       if CY, CALL adr
@@ -898,5 +905,10 @@ impl Cpu {
             //
         };
         op_code
+    }
+
+    pub fn interrupt(&mut self, code: u8) {
+        self.rst(code);
+        self.interrupt = false;
     }
 }

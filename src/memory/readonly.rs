@@ -3,7 +3,7 @@ use crate::memory::{Addressing, Memory, Work};
 /// 只读内存
 pub struct ReadOnly {
     /// 读取的数据
-    data: Box<[u8; 2048]>,
+    pub data: Box<[u8; 2048]>,
     /// 地址偏移量
     ofs: u16,
 }
@@ -24,6 +24,8 @@ impl ReadOnly {
             ofs,
         }
     }
+
+
 }
 
 
