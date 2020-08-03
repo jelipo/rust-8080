@@ -107,7 +107,6 @@ impl Cpu {
     }
 
     fn sub(&mut self, r: u8) {
-        println!("调用SUB");
         // SUB B        1    Z, S, P, CY, AC    A <- A - B
         let old_a = self.register.a;
         let new_a = old_a.wrapping_sub(r);
@@ -779,7 +778,7 @@ impl Cpu {
             0xda => self.condition_jmp(self.register.flag_cy),
             // IN D8        2                       special
             0xdb => {
-                println!("0xdb");
+                //println!("0xdb");
                 let byte = self.get_next_byte();
             }
             // CC adr       3                       if CY, CALL adr
@@ -851,7 +850,7 @@ impl Cpu {
                 let value = self.stack_pop();
                 self.register.a = ((value >> 8) as u8);
                 self.register.set_flags((value & 0x00d5 | 0x0002) as u8);
-                eprintln!("未实现 {:#04X}", op_code);
+                //eprintln!("未实现 {:#04X}", op_code);
                 // TODO
             }
             // JP adr       3                       if P=1 PC <- adr
@@ -886,7 +885,7 @@ impl Cpu {
             0xfa => self.condition_jmp(self.register.flag_s),
             // EI           1                       special
             0xfb => {
-                println!("开启中断");
+                //println!("开启中断");
                 self.interrupt = true
             }
             // CM adr       3                       if M, CALL adr   Call If Minus
@@ -908,7 +907,9 @@ impl Cpu {
     }
 
     pub fn interrupt(&mut self, code: u8) {
-        self.rst(code);
-        self.interrupt = false;
+        if self.interrupt {
+            self.rst(code);
+            self.interrupt = false;
+        }
     }
 }

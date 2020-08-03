@@ -1,4 +1,6 @@
 use std::borrow::Borrow;
+use std::cell::RefCell;
+use std::rc::Rc;
 use std::sync::{Arc, Mutex, RwLock};
 
 use crate::memory::{Addressing, Memory, ReadOnly, Video, Work};
@@ -10,6 +12,7 @@ pub struct SpaceInvadersAddressing {
     read_only_e: ReadOnly,
     work_ram: Work,
     pub video_ram: Video,
+    work_ram2: Work,
 }
 
 impl Addressing for SpaceInvadersAddressing {
@@ -21,6 +24,7 @@ impl Addressing for SpaceInvadersAddressing {
             0x1800..=0x1fff => self.read_only_e.get(addr),
             0x2000..=0x23ff => self.work_ram.get(addr),
             0x2400..=0x3fff => self.video_ram.get(addr),
+            0x4000..=0xFFFF => self.work_ram2.get(addr),
             _ => panic!("address not support")
         };
         value
@@ -34,7 +38,8 @@ impl Addressing for SpaceInvadersAddressing {
             0x1800..=0x1fff => self.read_only_e.set(addr, val),
             0x2000..=0x23ff => self.work_ram.set(addr, val),
             0x2400..=0x3fff => self.video_ram.set(addr, val),
-            _ => panic!("address not support")
+            0x4000..=0xFFFF => self.work_ram2.set(addr, val),
+            n => println!("Unsupport Address {:X}", n)
         }
     }
 }
@@ -44,7 +49,7 @@ impl SpaceInvadersAddressing {
                g_arr: Box<[u8; 2048]>,
                f_arr: Box<[u8; 2048]>,
                e_arr: Box<[u8; 2048]>,
-               video_arr: Arc<RwLock<[u8; 7168]>>,
+               video_arr: Rc<RefCell<[u8; 7168]>>,
     ) -> Self {
         Self {
             read_only_h: ReadOnly::init(0, h_arr),
@@ -53,8 +58,7 @@ impl SpaceInvadersAddressing {
             read_only_e: ReadOnly::init(0x1800, e_arr),
             work_ram: Work::init(0x2000, Box::new([0u8; 1024])),
             video_ram: Video::init(0x2400, video_arr),
+            work_ram2: Work::init(0x4000, Box::new([0u8; 1024])),
         }
     }
-
-
 }

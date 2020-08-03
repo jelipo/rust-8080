@@ -9,6 +9,8 @@ use minifb::{Key, Window, WindowOptions};
 
 use crate::cpu::{Cpu, Register};
 use crate::memory::{Addressing, SpaceInvadersAddressing};
+use std::cell::{RefCell, Ref};
+use std::rc::Rc;
 
 mod util;
 
@@ -19,10 +21,9 @@ const WIDTH: usize = 256;
 const HEIGHT: usize = 224;
 
 fn main() {
-    let video_arr = Arc::new(RwLock::new([0u8; 7168]));
+    let video_arr = Rc::new(RefCell::new([0u8; 7168]));
     let addressing = init_address(video_arr.clone()).unwrap();
     let mut cpu = Cpu::new(Box::new(addressing));
-    let mut cpu_borrow = cpu.borrow();
 
     //std::thread::sleep(Duration::from_secs(2));
     let mut buffer: Vec<u32> = vec![0; WIDTH * HEIGHT];
@@ -37,19 +38,19 @@ fn main() {
     });
 
     // 限制最高60帧
-    window.limit_update_rate(Some(std::time::Duration::from_micros(16600)));
+    window.limit_update_rate(Some(std::time::Duration::from_micros(16)));
 
     let mut int_num: bool = false;
     while window.is_open() && !window.is_key_down(Key::Escape) {
-        for i in 0..1000000 {
+        for i in 0..10000 {
             cpu.next();
         }
         cpu.interrupt(if int_num { 0x10 } else { 0x08 });
         int_num = !int_num;
-        for i in 0..1000000 {
+        for i in 0..10000 {
             cpu.next();
         }
-        test(&mut buffer, &video_arr);
+        test(&mut buffer, video_arr.clone());
         window.update_with_buffer(&buffer, WIDTH, HEIGHT).unwrap();
     }
 }
@@ -74,7 +75,7 @@ fn cpu_debug(cpu: &mut Cpu) -> io::Result<()> {
     Ok(())
 }
 
-fn init_address(video_arr: Arc<RwLock<[u8; 7168]>>) -> io::Result<SpaceInvadersAddressing> {
+fn init_address(video_arr: Rc<RefCell<[u8; 7168]>>) -> io::Result<SpaceInvadersAddressing> {
     let mut arr_h = [0u8; 2048];
     let mut h = File::open("C:/Users/cao/Desktop/invaders/invaders.h")?;
     let h_size = h.read(&mut arr_h)?;
@@ -96,15 +97,13 @@ fn init_address(video_arr: Arc<RwLock<[u8; 7168]>>) -> io::Result<SpaceInvadersA
     Ok(addressing)
 }
 
-fn test(buffer: &mut Vec<u32>, video_arr: &Arc<RwLock<[u8; 7168]>>) {
-    let arc = video_arr.clone();
-    let video_ram = arc.read().unwrap();
+fn test(buffer: &mut Vec<u32>, video_arr: Rc<RefCell<[u8; 7168]>>) {
     for i in 0..buffer.len() {
         let line = i / 8;
         if (i % 8) != 0 {
             continue;
         }
-        let byte = video_ram[line as usize];
+        let byte = video_arr.borrow_mut()[line as usize];
         buffer[i] = get_color(byte & 0b0000_0001);
         buffer[i + 1] = get_color(byte & 0b0000_0010);
         buffer[i + 2] = get_color(byte & 0b0000_0100);
