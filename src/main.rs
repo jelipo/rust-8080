@@ -38,12 +38,12 @@ fn main() {
     });
 
     // 限制最高60帧
-    window.limit_update_rate(Some(std::time::Duration::from_micros(166)));
+    window.limit_update_rate(Some(std::time::Duration::from_millis(10)));
 
     let mut times: u64 = 0;
     let mut int_num: bool = false;
     while window.is_open() && !window.is_key_down(Key::Escape) {
-        for i in 0..10000 {
+        for i in 0..1000 {
             let op_code = cpu.next();
             if times % 32 == 0 {
                 //println!("{:02X}  ", op_code);
@@ -57,7 +57,7 @@ fn main() {
         if result {
             int_num = !int_num;
         }
-        for i in 0..10000 {
+        for i in 0..1000 {
             let op_code = cpu.next();
             if times % 32 == 0 {
                 //println!("{:02X}  ", op_code);
@@ -67,7 +67,7 @@ fn main() {
             times += 1;
         }
 
-        println!("\n累计{}\n", times);
+        //println!("\n累计{}\n", times);
         test(&mut buffer, video_arr.clone());
         window.update_with_buffer(&buffer, WIDTH, HEIGHT).unwrap();
     }
