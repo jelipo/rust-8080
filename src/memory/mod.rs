@@ -1,3 +1,4 @@
+mod testadd;
 mod siaddressing;
 mod video;
 mod work;
@@ -12,3 +13,4 @@ pub use work::Work;
 pub use video::Video;
 pub use address::Addressing;
 pub use siaddressing::SpaceInvadersAddressing;
+pub use testadd::TestAddressing;

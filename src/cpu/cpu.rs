@@ -11,12 +11,14 @@ use crate::util::U16Util;
 /// Abstraction of Intel 8080
 pub struct Cpu {
     pub register: Register,
-    pub addring: Box<SpaceInvadersAddressing>,
+    pub addring: Box<dyn Addressing>,
     interrupt: bool,
+
+    temp_time: u64,
 }
 
 impl Cpu {
-    pub fn new(addring: Box<SpaceInvadersAddressing>) -> Self {
+    pub fn new(addring: Box<dyn Addressing>, pc: u16) -> Self {
         let register = Register {
             a: 0,
             b: 0,
@@ -25,7 +27,7 @@ impl Cpu {
             e: 0,
             h: 0,
             l: 0,
-            pc: 0,
+            pc: pc,
             sp: 0,
             flag_z: false,
             flag_s: false,
@@ -37,6 +39,7 @@ impl Cpu {
             register,
             addring,
             interrupt: false,
+            temp_time: 0,
         }
     }
 
@@ -58,7 +61,7 @@ impl Cpu {
         let new_r = r.wrapping_add(1);
         self.register.flag_z = new_r == 0;
         self.register.flag_s = (new_r & 0b10000000) != 0;
-        self.register.flag_p = new_r.count_ones() & 0x01 == 0x00;
+        self.register.flag_p = new_r.count_ones() % 2 == 0x00;
         self.register.flag_ac = (r & 0x0f) + 0x01 > 0x0f;
         new_r
     }
@@ -87,7 +90,7 @@ impl Cpu {
         self.register.a = new_a;
         self.register.flag_z = new_a == 0;
         self.register.flag_s = (new_a & 0b10000000) != 0;
-        self.register.flag_p = new_a.count_ones() & 0x01 == 0x00;
+        self.register.flag_p = new_a.count_ones() % 2 == 0x00;
         self.register.flag_cy = new_a < r_a;
         self.register.flag_ac = (r_a & 0x0f) + (r & 0x0f) > 0x0f;
     }
@@ -100,7 +103,7 @@ impl Cpu {
         let new_a = old_a.wrapping_add(r).wrapping_add(old_cy);
         self.register.flag_z = new_a == 0;
         self.register.flag_s = (new_a & 0b10000000) != 0;
-        self.register.flag_p = new_a.count_ones() & 0x01 == 0x00;
+        self.register.flag_p = new_a.count_ones() % 2 == 0x00;
         self.register.flag_cy = u16::from(old_a) + u16::from(r) + u16::from(old_cy) > 0xff;
         self.register.flag_ac = (old_a & 0x0f) + (r & 0x0f) + c > 0x0f;
         self.register.a = new_a;
@@ -112,7 +115,7 @@ impl Cpu {
         let new_a = old_a.wrapping_sub(r);
         self.register.flag_z = new_a == 0;
         self.register.flag_s = (new_a & 0b10000000) != 0;
-        self.register.flag_p = new_a.count_ones() & 0x01 == 0x00;
+        self.register.flag_p = new_a.count_ones() % 2 == 0x00;
         self.register.flag_cy = old_a < new_a;
         self.register.flag_ac = (old_a as i8 & 0x0f) - (r as i8 & 0x0f) >= 0x00;
         self.register.a = new_a
@@ -127,7 +130,7 @@ impl Cpu {
         let new_a = old_a.wrapping_sub(r).wrapping_sub(old_cy);
         self.register.flag_z = new_a == 0;
         self.register.flag_s = (new_a & 0b10000000) != 0;
-        self.register.flag_p = new_a.count_ones() & 0x01 == 0x00;
+        self.register.flag_p = new_a.count_ones() % 2 == 0x00;
         self.register.flag_cy = u16::from(old_a) < (u16::from(r) + u16::from(old_cy));
         self.register.flag_ac = (old_a as i8 & 0x0f) - (r as i8 & 0x0f) - (c as i8) >= 0x00;
         self.register.a = new_a;
@@ -139,7 +142,7 @@ impl Cpu {
         let new_a = self.register.a & r;
         self.register.flag_z = new_a == 0;
         self.register.flag_s = (new_a & 0b10000000) != 0;
-        self.register.flag_p = new_a.count_ones() & 0x01 == 0x00;
+        self.register.flag_p = new_a.count_ones() % 2 == 0x00;
         self.register.flag_cy = false;
         self.register.flag_ac = ((self.register.a & r) & 0x08) != 0;
         self.register.a = new_a;
@@ -151,7 +154,7 @@ impl Cpu {
         let new_a = self.register.a ^ r;
         self.register.flag_z = new_a == 0;
         self.register.flag_s = (new_a & 0b10000000) != 0;
-        self.register.flag_p = new_a.count_ones() & 0x01 == 0x00;
+        self.register.flag_p = new_a.count_ones() % 2 == 0x00;
         self.register.flag_cy = false;
         self.register.flag_ac = false;
         self.register.a = new_a;
@@ -163,7 +166,7 @@ impl Cpu {
         let new_a = self.register.a | r;
         self.register.flag_z = new_a == 0;
         self.register.flag_s = (new_a & 0b10000000) != 0;
-        self.register.flag_p = new_a.count_ones() & 0x01 == 0x00;
+        self.register.flag_p = new_a.count_ones() % 2 == 0x00;
         self.register.flag_cy = false;
         self.register.flag_ac = false;
         self.register.a = new_a;
@@ -177,7 +180,7 @@ impl Cpu {
         self.register.flag_s = (new_a & 0b10000000) != 0;
         self.register.flag_z = new_a == 0x00;
         self.register.flag_ac = ((old_a as i8 & 0x0f) - (r as i8 & 0x0f)) >= 0x00;
-        self.register.flag_p = new_a.count_ones() & 0x01 == 0x00;
+        self.register.flag_p = new_a.count_ones() % 2 == 0x00;
         self.register.flag_cy = u16::from(old_a) < u16::from(r);
 
         // self.register.flag_z = new_a == 0;
@@ -198,6 +201,10 @@ impl Cpu {
         let value = self.addring.get_word(self.register.sp);
         self.register.sp = self.register.sp.wrapping_add(2);
         value
+    }
+
+    fn jmp(&mut self) {
+        self.register.pc = self.get_next_word();
     }
 
     /// 根据跳转判断是否做 JMP 操作
@@ -252,10 +259,8 @@ impl Cpu {
             0x06 => self.register.b = self.get_next_byte(),
             // RLC          1    CY                A = A << 1; bit 0 = prev bit 7; CY = prev bit 7
             0x07 => {
-                let r_a = self.register.a;
-                let bit_7 = (r_a & 0b1000_0000) >> 7;
-                self.register.a = bit_7 | (r_a << 1);
-                self.register.flag_ac = bit_7 != 0;
+                self.register.a = self.register.a.rotate_left(1);
+                self.register.flag_cy = (self.register.a & 1) != 0;
             }
             // -
             0x08 => {
@@ -276,11 +281,8 @@ impl Cpu {
             0x0e => self.register.c = self.get_next_byte(),
             // RRC          1    CY                A = A >> 1; bit 7 = prev bit 0; CY = prev bit 0
             0x0f => {
-                let r_a = self.register.a;
-                // bit_7 maybe 0b1000_0000/0b0000_0000
-                let bit_7 = (r_a & 0b000_0001) << 7;
-                self.register.a = bit_7 | (r_a >> 1);
-                self.register.flag_cy = bit_7 != 0;
+                self.register.a = self.register.a.rotate_right(1);
+                self.register.flag_cy = (self.register.a & 0x80) != 0;
             }
             // -
             0x10 => {
@@ -289,8 +291,10 @@ impl Cpu {
             }
             // LXI D,D16    3                      D <- byte 3, E <- byte 2
             0x11 => {
-                let word = self.get_next_word();
-                self.register.set_de(word);
+                let byte_2 = self.get_next_byte();
+                let byte_3 = self.get_next_byte();
+                self.register.d = byte_3;
+                self.register.e = byte_2;
             }
             // STAX D       1                      (DE) <- A
             0x12 => self.addring.set_mem(self.register.get_de(), self.register.a),
@@ -326,14 +330,15 @@ impl Cpu {
             0x1e => self.register.e = self.get_next_byte(),
             // RAR          1    CY                A = A >> 1; bit 7 = prev bit 7; CY = prev bit 0
             0x1f => {
-                let old_a = self.register.a;
-                let new_a = if self.register.flag_cy {
-                    (old_a >> 1) | 0b1000_0000
-                } else {
-                    old_a >> 1
-                };
-                self.register.flag_cy = (old_a & 0b0000_0001) != 0;
-                self.register.a = new_a;
+                //println!("\nRAR\n");
+                // if self.temp_time < 200 {
+                //     self.temp_time += 1;
+                // } else {
+                //     ::std::process::exit(0);
+                // }
+                let new_carry = self.register.a & 1 != 0;
+                self.register.a = (self.register.a >> 1) | ((self.register.flag_cy as u8) << 7);
+                self.register.flag_cy = new_carry;
             }
             // RIM          1                      special    TODO Space dont need
             0x20 => { /* Nothing */ }
@@ -367,8 +372,12 @@ impl Cpu {
             0x29 => self.dad_add(self.register.get_hl()),
             // LHLD adr     3                      L <- (adr); H<-(adr+1)
             0x2a => {
-                self.register.l = self.get_next_byte();
-                self.register.h = self.get_next_byte();
+                // self.register.l = self.get_next_byte();
+                // self.register.h = self.get_next_byte();
+
+                let a = self.get_next_word();
+                let b = self.addring.get_word(a);
+                self.register.set_hl(b);
             }
             // DCX H        1                      HL = HL-1
             0x2b => self.register.set_hl(self.register.get_hl().wrapping_sub(1)),
@@ -864,11 +873,13 @@ impl Cpu {
             0xf4 => self.condition_call(!self.register.flag_s),
             // PUSH PSW     1                       (sp-2)<-flags; (sp-1)<-A; sp <- sp - 2
             0xf5 => {
-                //eprintln!("未实现 {:#04X}", op_code);
-                let flags = self.register.get_flags();
-                self.addring.set_mem(self.register.sp - 2, flags);
-                self.addring.set_mem(self.register.sp - 1, self.register.a);
-                self.register.sp -= 2;
+                println!("{}", self.register.get_flags());
+                self.stack_add((u16::from(self.register.a) << 8) | u16::from(self.register.get_flags()));
+                // //eprintln!("未实现 {:#04X}", op_code);
+                // let flags = self.register.get_flags();
+                // self.addring.set_mem(self.register.sp - 2, flags);
+                // self.addring.set_mem(self.register.sp - 1, self.register.a);
+                // self.register.sp -= 2;
             }
             // ORI D8       2    Z, S, P, CY, AC    A <- A | data
             0xf6 => {
@@ -896,6 +907,15 @@ impl Cpu {
             0xfe => {
                 let data = self.get_next_byte();
                 self.cmp(data);
+
+                // let byte = self.get_next_byte() as u16;
+                // let answer = (self.register.a as u16).wrapping_sub(byte);
+                //
+                // self.register.flag_z = answer & 0xff == 0;
+                // self.register.flag_cy = (self.register.a as u16) < byte;
+                // self.register.flag_p = (answer as u8).count_ones() % 2 == 0;
+                // self.register.flag_s = answer & 0x80 != 0;
+                // self.register.flag_ac = ((self.register.a & 0xf).wrapping_sub(byte as u8 & 0xf)) > 0xf;
             }
             // RST 7        1                       CALL $38
             0xff => self.rst(op_code),
@@ -906,10 +926,15 @@ impl Cpu {
         op_code
     }
 
-    pub fn interrupt(&mut self, code: u8) {
-        if self.interrupt {
+    pub fn interrupt(&mut self, code: u8) -> bool {
+        return if self.interrupt {
             self.rst(code);
             self.interrupt = false;
-        }
+            true
+        } else {
+            false
+        };
     }
 }
+
+

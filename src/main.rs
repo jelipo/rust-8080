@@ -1,16 +1,16 @@
 use std::borrow::Borrow;
+use std::cell::{Ref, RefCell};
 use std::fs::File;
 use std::io;
 use std::io::Read;
+use std::rc::Rc;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
 use minifb::{Key, Window, WindowOptions};
 
 use crate::cpu::{Cpu, Register};
-use crate::memory::{Addressing, SpaceInvadersAddressing};
-use std::cell::{RefCell, Ref};
-use std::rc::Rc;
+use crate::memory::{Addressing, SpaceInvadersAddressing, TestAddressing};
 
 mod util;
 
@@ -23,7 +23,7 @@ const HEIGHT: usize = 224;
 fn main() {
     let video_arr = Rc::new(RefCell::new([0u8; 7168]));
     let addressing = init_address(video_arr.clone()).unwrap();
-    let mut cpu = Cpu::new(Box::new(addressing));
+    let mut cpu = Cpu::new(Box::new(addressing), 0);
 
     //std::thread::sleep(Duration::from_secs(2));
     let mut buffer: Vec<u32> = vec![0; WIDTH * HEIGHT];
@@ -38,18 +38,36 @@ fn main() {
     });
 
     // 限制最高60帧
-    window.limit_update_rate(Some(std::time::Duration::from_micros(16)));
+    window.limit_update_rate(Some(std::time::Duration::from_micros(166)));
 
+    let mut times: u64 = 0;
     let mut int_num: bool = false;
     while window.is_open() && !window.is_key_down(Key::Escape) {
         for i in 0..10000 {
-            cpu.next();
+            let op_code = cpu.next();
+            if times % 32 == 0 {
+                //println!("{:02X}  ", op_code);
+            } else {
+                //print!("{:02X}  ", op_code);
+            }
+            times += 1;
         }
-        cpu.interrupt(if int_num { 0x10 } else { 0x08 });
-        int_num = !int_num;
+
+        let result = cpu.interrupt(if int_num { 0x10 } else { 0x08 });
+        if result {
+            int_num = !int_num;
+        }
         for i in 0..10000 {
-            cpu.next();
+            let op_code = cpu.next();
+            if times % 32 == 0 {
+                //println!("{:02X}  ", op_code);
+            } else {
+                //print!("{:02X}  ", op_code);
+            }
+            times += 1;
         }
+
+        println!("\n累计{}\n", times);
         test(&mut buffer, video_arr.clone());
         window.update_with_buffer(&buffer, WIDTH, HEIGHT).unwrap();
     }
@@ -114,3 +132,20 @@ fn test(buffer: &mut Vec<u32>, video_arr: Rc<RefCell<[u8; 7168]>>) {
         buffer[i + 7] = get_color(byte & 0b1000_0000);
     }
 }
+
+// fn cpu_test() {
+//     let mut f = File::open("C:/Users/cao/Desktop/cpudiag.bin").expect("Failed to open cpu.bin");
+//     let mut buffer = Vec::new();
+//     f.read_to_end(&mut buffer)
+//         .expect("Failed to read cpu.bin into buffer");
+//     let addressing = TestAddressing::new(&mut buffer);
+//     let mut state = Cpu::new(Box::new(addressing), 0x100);
+//     let mut a: u64 = 0;
+//     loop {
+//         let i = state.next();
+//         if i != 0 {
+//             println!("{:X} times:{} ", i, a);
+//         }
+//         a += 1;
+//     }
+// }
