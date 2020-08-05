@@ -1,24 +1,21 @@
-use std::borrow::Borrow;
 use std::mem;
-use std::ops::Sub;
-use std::sync::Arc;
 
 use crate::cpu::register::Register;
-use crate::memory::address::Addressing;
-use crate::memory::SpaceInvadersAddressing;
+use crate::memory::address::AddressBus;
 use crate::util::U16Util;
 
 /// Abstraction of Intel 8080
 pub struct Cpu {
     pub register: Register,
-    pub addring: Box<dyn Addressing>,
+    pub addring: Box<dyn AddressBus>,
     interrupt: bool,
-
-    temp_time: u64,
 }
 
 impl Cpu {
-    pub fn new(addring: Box<dyn Addressing>, pc: u16) -> Self {
+    ///
+    /// # Arguments
+    /// * `name` - A string slice that holds the name of the person
+    pub fn new(addring: Box<dyn AddressBus>, pc: u16) -> Self {
         let register = Register {
             a: 0,
             b: 0,
@@ -27,7 +24,7 @@ impl Cpu {
             e: 0,
             h: 0,
             l: 0,
-            pc: pc,
+            pc,
             sp: 0,
             flag_z: false,
             flag_s: false,
@@ -39,7 +36,6 @@ impl Cpu {
             register,
             addring,
             interrupt: false,
-            temp_time: 0,
         }
     }
 
@@ -76,6 +72,26 @@ impl Cpu {
         new_r
     }
 
+    fn daa(&mut self) {
+        let mut a: u8 = 0;
+        let mut c = self.register.flag_cy;
+        let lsb = self.register.a & 0x0f;
+        let msb = self.register.a >> 4;
+        // If the least significant four bits of the accumulator represents a number greater than 9, or if the Auxiliary
+        // Carry bit is equal to one, the accumulator is incremented by six. Otherwise, no incrementing occurs.
+        if (lsb > 9) || self.register.flag_ac {
+            a += 0x06;
+        }
+        // If the most significant four bits of the accumulator now represent a number greater than 9, or if the normal
+        // carry bit is equal to one, the most sign ificant four bits of the accumulator are incremented by six.
+        if (msb > 9) || self.register.flag_cy || (msb >= 9 && lsb > 9) {
+            a += 0x60;
+            c = true;
+        }
+        self.add(a);
+        self.register.flag_cy = c;
+    }
+
     /// r: maybe BC/
     fn dad_add(&mut self, r: u16) {
         let old_hl = self.register.get_hl();
@@ -95,8 +111,8 @@ impl Cpu {
         self.register.flag_ac = (r_a & 0x0f) + (r & 0x0f) > 0x0f;
     }
 
+    /// example :  ADC B        1    Z, S, P, CY, AC    A <- A + B + CY
     fn adc(&mut self, r: u8) {
-        // ADC B        1    Z, S, P, CY, AC    A <- A + B + CY
         let c = u8::from(self.register.flag_cy);
         let old_a = self.register.a;
         let old_cy: u8 = u8::from(self.register.flag_cy);
@@ -109,8 +125,8 @@ impl Cpu {
         self.register.a = new_a;
     }
 
+    /// example : SUB B        1    Z, S, P, CY, AC    A <- A - B
     fn sub(&mut self, r: u8) {
-        // SUB B        1    Z, S, P, CY, AC    A <- A - B
         let old_a = self.register.a;
         let new_a = old_a.wrapping_sub(r);
         self.register.flag_z = new_a == 0;
@@ -177,17 +193,11 @@ impl Cpu {
     fn cmp(&mut self, r: u8) {
         let old_a = self.register.a;
         let new_a = old_a.wrapping_sub(r);
-        self.register.flag_s = (new_a & 0b10000000) != 0;
         self.register.flag_z = new_a == 0x00;
-        self.register.flag_ac = ((old_a as i8 & 0x0f) - (r as i8 & 0x0f)) >= 0x00;
+        self.register.flag_s = (new_a & 0b10000000) != 0;
         self.register.flag_p = new_a.count_ones() % 2 == 0x00;
-        self.register.flag_cy = u16::from(old_a) < u16::from(r);
-
-        // self.register.flag_z = new_a == 0;
-        // self.register.flag_s = (new_a & 0b10000000) != 0;
-        // self.register.flag_p = new_a.count_ones() & 0x01 == 0x00;
-        // self.register.flag_cy = old_a < new_a;
-        // self.register.flag_ac =;
+        self.register.flag_cy = old_a < new_a;
+        self.register.flag_ac = ((old_a as i8 & 0x0f) - (r as i8 & 0x0f)) >= 0x00;
     }
 
     /// Add value to Stack
@@ -208,20 +218,22 @@ impl Cpu {
     }
 
     /// 根据跳转判断是否做 JMP 操作
-    fn condition_jmp(&mut self, condition: bool) {
+    fn condition_jmp(&mut self, condition: bool) -> bool {
         let word = self.get_next_word();
         if condition {
             self.register.pc = word;
         }
+        condition
     }
 
     /// 根据跳转判断是否做 CALL 操作
-    fn condition_call(&mut self, condition: bool) {
+    fn condition_call(&mut self, condition: bool) -> bool {
         let word = self.get_next_word();
         if condition {
             self.stack_add(self.register.pc);
             self.register.pc = word;
         }
+        condition
     }
 
     fn call(&mut self) {
@@ -239,6 +251,7 @@ impl Cpu {
     /// 下一步指令
     pub fn next(&mut self) -> u8 {
         let op_code = self.get_next_byte();
+        let mut ex_cycle: bool = true;
         match op_code {
             // NOP          1
             0x00 => { /* Nothing */ }
@@ -291,10 +304,8 @@ impl Cpu {
             }
             // LXI D,D16    3                      D <- byte 3, E <- byte 2
             0x11 => {
-                let byte_2 = self.get_next_byte();
-                let byte_3 = self.get_next_byte();
-                self.register.d = byte_3;
-                self.register.e = byte_2;
+                let word = self.get_next_word();
+                self.register.set_de(word);
             }
             // STAX D       1                      (DE) <- A
             0x12 => self.addring.set_mem(self.register.get_de(), self.register.a),
@@ -308,11 +319,9 @@ impl Cpu {
             0x16 => self.register.d = self.get_next_byte(),
             // RAL          1    CY                A = A << 1; bit 0 = prev CY; CY = prev bit 7
             0x17 => {
-                let old_cy_bit: u8 = if self.register.flag_cy { 0b0000_0001 } else { 0b0000_0000 };
-                let r_a = self.register.a;
-                let new_cy_bit = r_a & 0b1000_0000;
-                self.register.a = r_a << 1 | old_cy_bit;
-                self.register.flag_cy = new_cy_bit != 0;
+                let new_flag_cy = self.register.a & 0x80 != 0;
+                self.register.a = (self.register.a << 1) | self.register.flag_cy as u8;
+                self.register.flag_cy = new_flag_cy;
             }
             // -
             0x18 => { /* Nothing */ }
@@ -330,15 +339,9 @@ impl Cpu {
             0x1e => self.register.e = self.get_next_byte(),
             // RAR          1    CY                A = A >> 1; bit 7 = prev bit 7; CY = prev bit 0
             0x1f => {
-                //println!("\nRAR\n");
-                // if self.temp_time < 200 {
-                //     self.temp_time += 1;
-                // } else {
-                //     ::std::process::exit(0);
-                // }
-                let new_carry = self.register.a & 1 != 0;
+                let new_flag_cy = self.register.a & 1 != 0;
                 self.register.a = (self.register.a >> 1) | ((self.register.flag_cy as u8) << 7);
-                self.register.flag_cy = new_carry;
+                self.register.flag_cy = new_flag_cy;
             }
             // RIM          1                      special    TODO Space dont need
             0x20 => { /* Nothing */ }
@@ -350,8 +353,7 @@ impl Cpu {
             // SHLD adr     3                      (adr) <-L; (adr+1)<-H
             0x22 => {
                 let addr = self.get_next_word();
-                self.addring.set_mem(addr, self.register.l);
-                self.addring.set_mem(addr + 1, self.register.h);
+                self.addring.set_word(addr, self.register.get_hl());
             }
             // INX H        1                      HL <- HL + 1
             0x23 => self.register.set_hl(self.register.get_hl().wrapping_add(1)),
@@ -363,8 +365,7 @@ impl Cpu {
             0x26 => self.register.h = self.get_next_byte(),
             // DAA          1                      special
             0x27 => {
-                eprintln!("未实现 {:#04X}", op_code);
-                // TODO
+                self.daa();
             }
             // -
             0x28 => { /* Nothing */ }
@@ -372,12 +373,9 @@ impl Cpu {
             0x29 => self.dad_add(self.register.get_hl()),
             // LHLD adr     3                      L <- (adr); H<-(adr+1)
             0x2a => {
-                // self.register.l = self.get_next_byte();
-                // self.register.h = self.get_next_byte();
-
-                let a = self.get_next_word();
-                let b = self.addring.get_word(a);
-                self.register.set_hl(b);
+                let addr = self.get_next_word();
+                let word = self.addring.get_word(addr);
+                self.register.set_hl(word);
             }
             // DCX H        1                      HL = HL-1
             0x2b => self.register.set_hl(self.register.get_hl().wrapping_sub(1)),
@@ -486,10 +484,7 @@ impl Cpu {
             // MOV D,L      1                       D <- L
             0x55 => self.register.d = self.register.l,
             // MOV D,M      1                       D <- (HL)
-            0x56 => {
-                let addr = self.register.get_hl();
-                self.register.d = self.addring.get_mem(addr);
-            }
+            0x56 => self.register.d = self.addring.get_mem(self.register.get_hl()),
             // MOV D,A      1                       D <- A
             0x57 => self.register.d = self.register.a,
             // MOV E,B      1                       E <- B
@@ -535,9 +530,7 @@ impl Cpu {
             // MOV L,H      1                       L <- H
             0x6c => self.register.l = self.register.h,
             // MOV L,L      1                       L <- L
-            0x6d => {
-                // Nothing
-            }
+            0x6d => { /* Nothing */ }
             // MOV L,M      1                       L <- (HL)
             0x6e => self.register.l = self.addring.get_mem(self.register.get_hl()),
             // MOV L,A      1                       L <- A
@@ -710,19 +703,11 @@ impl Cpu {
                 self.register.set_bc(value);
             }
             // JNZ adr      3                       if NZ, PC <- adr
-            0xc2 => {
-                self.condition_jmp(!self.register.flag_z);
-            }
+            0xc2 => ex_cycle = self.condition_jmp(!self.register.flag_z),
             // JMP adr      3                       PC <= adr
-            0xc3 => self.register.pc = self.get_next_word(),
+            0xc3 => self.jmp(),
             // CNZ adr      3                       if NZ, CALL adr
-            0xc4 => {
-                let word = self.get_next_word();
-                if !self.register.flag_z {
-                    self.stack_add(self.register.pc);
-                    self.register.pc = word;
-                }
-            }
+            0xc4 => ex_cycle = self.condition_call(!self.register.flag_z),
             // PUSH B       1                       (sp-2)<-C; (sp-1)<-B; sp <- sp - 2
             0xc5 => self.stack_add(self.register.get_bc()),
             // ADI D8       2    Z, S, P, CY, AC    A <- A + byte
@@ -737,14 +722,14 @@ impl Cpu {
             // RET          1                       PC.lo <- (sp); PC.hi<-(sp+1); SP <- SP+2
             0xc9 => self.register.pc = self.stack_pop(),
             // JZ adr       3                       if Z, PC <- adr
-            0xca => self.condition_jmp(self.register.flag_z),
+            0xca => ex_cycle = self.condition_jmp(self.register.flag_z),
             // -
             0xcb => {
                 eprintln!("未实现 {:#04X}", op_code);
                 // TODO
             }
             // CZ adr       3                       if Z, CALL adr
-            0xcc => self.condition_call(self.register.flag_z),
+            0xcc => ex_cycle = self.condition_call(self.register.flag_z),
             // CALL adr     3                       (SP-1)<-PC.hi;(SP-2)<-PC.lo;SP<-SP+2;PC=adr
             // push stack ,then JMP
             0xcd => self.call(),
@@ -763,13 +748,14 @@ impl Cpu {
                 self.register.set_de(value);
             }
             // JNC adr      3                       if NCY, PC<-adr
-            0xd2 => self.condition_jmp(!self.register.flag_cy),
+            0xd2 => ex_cycle = self.condition_jmp(!self.register.flag_cy),
             // OUT D8       2                       special
             0xd3 => {
-                let byte = self.get_next_byte();
+                //eprintln!("未完整实现 {:#04X}", op_code);
+                let _byte = self.get_next_byte();
             }
             // CNC adr      3                       if NCY, CALL adr
-            0xd4 => self.condition_call(!self.register.flag_cy),
+            0xd4 => ex_cycle = self.condition_call(!self.register.flag_cy),
             // PUSH D       1                       (sp-2)<-E; (sp-1)<-D; sp <- sp - 2
             0xd5 => self.stack_add(self.register.get_de()),
             // SUI D8       2    Z, S, P, CY, AC    A <- A - data
@@ -784,14 +770,14 @@ impl Cpu {
             // - 0xC9
             0xd9 => self.register.pc = self.stack_pop(),
             // JC adr       3                       if CY, PC<-adr
-            0xda => self.condition_jmp(self.register.flag_cy),
+            0xda => ex_cycle = self.condition_jmp(self.register.flag_cy),
             // IN D8        2                       special
             0xdb => {
-                //println!("0xdb");
-                let byte = self.get_next_byte();
+                // eprintln!("未完整实现 {:#04X}", op_code);
+                let _byte = self.get_next_byte();
             }
             // CC adr       3                       if CY, CALL adr
-            0xdc => self.condition_call(self.register.flag_cy),
+            0xdc => ex_cycle = self.condition_call(self.register.flag_cy),
             // -
             0xdd => self.call(),
             // SBI D8       2    Z, S, P, CY, AC    A <- A - data - CY
@@ -809,18 +795,16 @@ impl Cpu {
                 self.register.set_hl(value);
             }
             // JPO adr      3                       if PO, PC <- adr
-            0xe2 => self.condition_jmp(!self.register.flag_p),
+            0xe2 => ex_cycle = self.condition_jmp(!self.register.flag_p),
             // XTHL         1                       L <-> (SP); H <-> (SP+1)
             0xe3 => {
-                let sp = self.addring.get_mem(self.register.sp);
-                let sp_1 = self.addring.get_mem(self.register.sp + 1);
-                self.addring.set_mem(self.register.sp, self.register.l);
-                self.addring.set_mem(self.register.sp + 1, self.register.h);
-                self.register.l = sp;
-                self.register.h = sp_1;
+                let addr = self.addring.get_word(self.register.sp);
+                let hl = self.register.get_hl();
+                self.register.set_hl(addr);
+                self.addring.set_word(self.register.sp, hl);
             }
             // CPO adr      3                       if PO, CALL adr
-            0xe4 => self.condition_call(!self.register.flag_p),
+            0xe4 => ex_cycle = self.condition_call(!self.register.flag_p),
             // PUSH H       1                       (sp-2)<-L; (sp-1)<-H; sp <- sp - 2
             0xe5 => self.stack_add(self.register.get_hl()),
             // ANI D8       2    Z, S, P, CY, AC    A <- A & data
@@ -835,14 +819,14 @@ impl Cpu {
             // PCHL         1                       PC.hi <- H; PC.lo <- L
             0xe9 => self.register.pc = self.register.get_hl(),
             // JPE adr      3                       if PE, PC <- adr
-            0xea => self.condition_jmp(self.register.flag_p),
+            0xea => ex_cycle = self.condition_jmp(self.register.flag_p),
             // XCHG         1                       H <-> D; L <-> E
             0xeb => {
                 mem::swap(&mut self.register.h, &mut self.register.d);
                 mem::swap(&mut self.register.l, &mut self.register.e);
             }
             // CPE adr      3                       if PE, CALL adr    Parity Even
-            0xec => self.condition_call(self.register.flag_p),
+            0xec => ex_cycle = self.condition_call(self.register.flag_p),
             // -
             0xed => self.call(),
             // XRI D8       2    Z, S, P, CY, AC    A <- A ^ data
@@ -857,29 +841,18 @@ impl Cpu {
             // POP PSW      1                       flags <- (sp); A <- (sp+1); sp <- sp+2
             0xf1 => {
                 let value = self.stack_pop();
-                self.register.a = ((value >> 8) as u8);
+                self.register.a = (value >> 8) as u8;
                 self.register.set_flags((value & 0x00d5 | 0x0002) as u8);
-                //eprintln!("未实现 {:#04X}", op_code);
-                // TODO
             }
             // JP adr       3                       if P=1 PC <- adr
-            0xf2 => self.condition_jmp(self.register.flag_s),
+            0xf2 => ex_cycle = self.condition_jmp(self.register.flag_s),
             // DI           1                       special
-            0xf3 => {
-                println!("关闭中断");
-                self.interrupt = false
-            }
+            0xf3 => self.interrupt = false,
             // CP adr       3                       if P, PC <- adr    Call if  Plus
-            0xf4 => self.condition_call(!self.register.flag_s),
+            0xf4 => ex_cycle = self.condition_call(!self.register.flag_s),
             // PUSH PSW     1                       (sp-2)<-flags; (sp-1)<-A; sp <- sp - 2
             0xf5 => {
-                println!("{}", self.register.get_flags());
                 self.stack_add((u16::from(self.register.a) << 8) | u16::from(self.register.get_flags()));
-                // //eprintln!("未实现 {:#04X}", op_code);
-                // let flags = self.register.get_flags();
-                // self.addring.set_mem(self.register.sp - 2, flags);
-                // self.addring.set_mem(self.register.sp - 1, self.register.a);
-                // self.register.sp -= 2;
             }
             // ORI D8       2    Z, S, P, CY, AC    A <- A | data
             0xf6 => {
@@ -893,37 +866,27 @@ impl Cpu {
             // SPHL         1                       SP=HL
             0xf9 => self.register.sp = self.register.get_hl(),
             // JM adr       3                       if M, PC <- adr
-            0xfa => self.condition_jmp(self.register.flag_s),
+            0xfa => ex_cycle = self.condition_jmp(self.register.flag_s),
             // EI           1                       special
-            0xfb => {
-                //println!("开启中断");
-                self.interrupt = true
-            }
+            0xfb => self.interrupt = true,
             // CM adr       3                       if M, CALL adr   Call If Minus
-            0xfc => self.condition_call(self.register.flag_s),
+            0xfc => ex_cycle = self.condition_call(self.register.flag_s),
             // -
             0xfd => self.call(),
             // CPI D8       2    Z, S, P, CY, AC    A - data
             0xfe => {
                 let data = self.get_next_byte();
                 self.cmp(data);
-
-                // let byte = self.get_next_byte() as u16;
-                // let answer = (self.register.a as u16).wrapping_sub(byte);
-                //
-                // self.register.flag_z = answer & 0xff == 0;
-                // self.register.flag_cy = (self.register.a as u16) < byte;
-                // self.register.flag_p = (answer as u8).count_ones() % 2 == 0;
-                // self.register.flag_s = answer & 0x80 != 0;
-                // self.register.flag_ac = ((self.register.a & 0xf).wrapping_sub(byte as u8 & 0xf)) > 0xf;
             }
             // RST 7        1                       CALL $38
             0xff => self.rst(op_code),
-            //
-            _ => println!("unknow opcode 0x{:X}", op_code)
-            //
+            n => println!("unknow opcode 0x{:X}", n)
         };
-        op_code
+        return if ex_cycle {
+            OP_CYCLES[op_code as usize] + 6
+        } else {
+            OP_CYCLES[op_code as usize]
+        };
     }
 
     pub fn interrupt(&mut self, code: u8) -> bool {
@@ -937,4 +900,24 @@ impl Cpu {
     }
 }
 
+
+//  0   1   2   3   4   5   6   7   8   9   a   b   c   d   e   f
+const OP_CYCLES: [u8; 256] = [
+    04, 10, 07, 05, 05, 05, 07, 04, 04, 10, 07, 05, 05, 05, 07, 04, // 0
+    04, 10, 07, 05, 05, 05, 07, 04, 04, 10, 07, 05, 05, 05, 07, 04, // 1
+    04, 10, 16, 05, 05, 05, 07, 04, 04, 10, 16, 05, 05, 05, 07, 04, // 2
+    04, 10, 13, 05, 10, 10, 10, 04, 04, 10, 13, 05, 05, 05, 07, 04, // 3
+    05, 05, 05, 05, 05, 05, 07, 05, 05, 05, 05, 05, 05, 05, 07, 05, // 4
+    05, 05, 05, 05, 05, 05, 07, 05, 05, 05, 05, 05, 05, 05, 07, 05, // 5
+    05, 05, 05, 05, 05, 05, 07, 05, 05, 05, 05, 05, 05, 05, 07, 05, // 6
+    07, 07, 07, 07, 07, 07, 07, 07, 05, 05, 05, 05, 05, 05, 07, 05, // 7
+    04, 04, 04, 04, 04, 04, 07, 04, 04, 04, 04, 04, 04, 04, 07, 04, // 8
+    04, 04, 04, 04, 04, 04, 07, 04, 04, 04, 04, 04, 04, 04, 07, 04, // 9
+    04, 04, 04, 04, 04, 04, 07, 04, 04, 04, 04, 04, 04, 04, 07, 04, // a
+    04, 04, 04, 04, 04, 04, 07, 04, 04, 04, 04, 04, 04, 04, 07, 04, // b
+    05, 10, 10, 10, 11, 11, 07, 11, 05, 10, 10, 10, 11, 17, 07, 11, // c
+    05, 10, 10, 10, 11, 11, 07, 11, 05, 10, 10, 10, 11, 17, 07, 11, // d
+    05, 10, 10, 18, 11, 11, 07, 11, 05, 05, 10, 05, 11, 17, 07, 11, // e
+    05, 10, 10, 04, 11, 11, 07, 11, 05, 05, 10, 04, 11, 17, 07, 11, // f
+];
 

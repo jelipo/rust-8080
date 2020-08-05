@@ -1,14 +1,13 @@
 use std::cell::RefCell;
 use std::rc::Rc;
-use std::sync::{Arc, Mutex, RwLock};
 
-use crate::memory::{Addressing, Memory, ReadOnly, Video, Work};
+use crate::memory::{AddressBus};
 
 pub struct TestAddressing {
     rom: Rc<RefCell<Vec<u8>>>,
 }
 
-impl Addressing for TestAddressing {
+impl AddressBus for TestAddressing {
     fn get_mem(&self, addr: u16) -> u8 {
         self.rom.borrow()[addr as usize]
     }

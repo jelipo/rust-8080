@@ -1,3 +1,5 @@
+mod game;
+
 pub use cpu::Cpu;
 pub use cpu::Register;
 pub use memory::TestAddressing;

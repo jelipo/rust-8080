@@ -1,76 +1,69 @@
-use std::borrow::Borrow;
-use std::cell::{Ref, RefCell};
+use std::cell::RefCell;
 use std::fs::File;
 use std::io;
 use std::io::Read;
 use std::rc::Rc;
-use std::sync::{Arc, RwLock};
-use std::time::Duration;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use minifb::{Key, Window, WindowOptions};
 
-use crate::cpu::{Cpu, Register};
-use crate::memory::{Addressing, SpaceInvadersAddressing, TestAddressing};
+use crate::cpu::Cpu;
+use crate::memory::{AddressBus, SpaceInvadersAddressing, TestAddressing};
+use crate::game::{InvadersLaunch, Launch};
 
 mod util;
 
 mod cpu;
 mod memory;
+mod game;
 
 const WIDTH: usize = 256;
 const HEIGHT: usize = 224;
 
 fn main() {
-    let video_arr = Rc::new(RefCell::new([0u8; 7168]));
-    let addressing = init_address(video_arr.clone()).unwrap();
-    let mut cpu = Cpu::new(Box::new(addressing), 0);
+    let launch = InvadersLaunch::new();
+    launch.start();
 
-    //std::thread::sleep(Duration::from_secs(2));
-    let mut buffer: Vec<u32> = vec![0; WIDTH * HEIGHT];
-
-    let mut window = Window::new(
-        "Test - ESC to exit",
-        WIDTH,
-        HEIGHT,
-        WindowOptions::default(),
-    ).unwrap_or_else(|e| {
-        panic!("{}", e);
-    });
-
-    // 限制最高60帧
-    window.limit_update_rate(Some(std::time::Duration::from_millis(10)));
-
-    let mut times: u64 = 0;
-    let mut int_num: bool = false;
-    while window.is_open() && !window.is_key_down(Key::Escape) {
-        for i in 0..1000 {
-            let op_code = cpu.next();
-            if times % 32 == 0 {
-                //println!("{:02X}  ", op_code);
-            } else {
-                //print!("{:02X}  ", op_code);
-            }
-            times += 1;
-        }
-
-        let result = cpu.interrupt(if int_num { 0x10 } else { 0x08 });
-        if result {
-            int_num = !int_num;
-        }
-        for i in 0..1000 {
-            let op_code = cpu.next();
-            if times % 32 == 0 {
-                //println!("{:02X}  ", op_code);
-            } else {
-                //print!("{:02X}  ", op_code);
-            }
-            times += 1;
-        }
-
-        //println!("\n累计{}\n", times);
-        test(&mut buffer, video_arr.clone());
-        window.update_with_buffer(&buffer, WIDTH, HEIGHT).unwrap();
-    }
+    //
+    // let video_arr = Rc::new(RefCell::new([0u8; 7168]));
+    // let addressing = init_address(video_arr.clone()).unwrap();
+    // let mut cpu = Cpu::new(Box::new(addressing), 0);
+    //
+    // //std::thread::sleep(Duration::from_secs(2));
+    // let mut buffer: Vec<u32> = vec![0; WIDTH * HEIGHT];
+    //
+    // let mut window = Window::new(
+    //     "Test - ESC to exit",
+    //     WIDTH,
+    //     HEIGHT,
+    //     WindowOptions::default(),
+    // ).unwrap_or_else(|e| {
+    //     panic!("{}", e);
+    // });
+    //
+    // // 限制最高60帧
+    // window.limit_update_rate(Some(std::time::Duration::from_micros(8600)));
+    //
+    //
+    // let mut int_num: bool = false;
+    // let mut lasttime = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
+    // while window.is_open() && !window.is_key_down(Key::Escape) {
+    //     println!("{:?}", SystemTime::now().duration_since(UNIX_EPOCH).unwrap() - lasttime);
+    //     lasttime = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
+    //     for _i in 0..10000 {
+    //         let op_code = cpu.next();
+    //     }
+    //
+    //     let result = cpu.interrupt(if int_num { 0x10 } else { 0x08 });
+    //     if result {
+    //         int_num = !int_num;
+    //     }
+    //     for _i in 0..10000 {
+    //         let op_code = cpu.next();
+    //     }
+    //     test(&mut buffer, video_arr.clone());
+    //     window.update_with_buffer(&buffer, WIDTH, HEIGHT).unwrap();
+    // }
 }
 
 fn get_color(bit: u8) -> u32 {
@@ -79,7 +72,7 @@ fn get_color(bit: u8) -> u32 {
 
 fn cpu_debug(cpu: &mut Cpu) -> io::Result<()> {
     println!("   no        op       af      bc      de      hl      pc      sp  ");
-    let mut op_code = 0;
+    let mut op_code;
     let times = 0042050;
     for i in 0..times {
         op_code = cpu.next();
@@ -93,27 +86,27 @@ fn cpu_debug(cpu: &mut Cpu) -> io::Result<()> {
     Ok(())
 }
 
-fn init_address(video_arr: Rc<RefCell<[u8; 7168]>>) -> io::Result<SpaceInvadersAddressing> {
-    let mut arr_h = [0u8; 2048];
-    let mut h = File::open("C:/Users/cao/Desktop/invaders/invaders.h")?;
-    let h_size = h.read(&mut arr_h)?;
-
-    let mut arr_g = [0u8; 2048];
-    let mut g = File::open("C:/Users/cao/Desktop/invaders/invaders.g")?;
-    let g_size = g.read(&mut arr_g)?;
-
-    let mut arr_f = [0u8; 2048];
-    let mut f = File::open("C:/Users/cao/Desktop/invaders/invaders.f")?;
-    let f_size = f.read(&mut arr_f)?;
-
-    let mut arr_e = [0u8; 2048];
-    let mut e = File::open("C:/Users/cao/Desktop/invaders/invaders.e")?;
-    let e_size = e.read(&mut arr_e)?;
-
-    let addressing = SpaceInvadersAddressing::new(
-        Box::new(arr_h), Box::new(arr_g), Box::new(arr_f), Box::new(arr_e), video_arr);
-    Ok(addressing)
-}
+// fn init_address(video_arr: Rc<RefCell<[u8; 7168]>>) -> io::Result<SpaceInvadersAddressing> {
+//     let mut arr_h = [0u8; 2048];
+//     let mut h = File::open("./res/invaders.h")?;
+//     h.read(&mut arr_h)?;
+//
+//     let mut arr_g = [0u8; 2048];
+//     let mut g = File::open("./res/invaders.g")?;
+//     g.read(&mut arr_g)?;
+//
+//     let mut arr_f = [0u8; 2048];
+//     let mut f = File::open("./res/invaders.f")?;
+//     f.read(&mut arr_f)?;
+//
+//     let mut arr_e = [0u8; 2048];
+//     let mut e = File::open("./res/invaders.e")?;
+//     e.read(&mut arr_e)?;
+//
+//     let addressing = SpaceInvadersAddressing::new(
+//         Box::new(arr_h), Box::new(arr_g), Box::new(arr_f), Box::new(arr_e), video_arr);
+//     Ok(addressing)
+// }
 
 fn test(buffer: &mut Vec<u32>, video_arr: Rc<RefCell<[u8; 7168]>>) {
     for i in 0..buffer.len() {
