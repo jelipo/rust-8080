@@ -1,6 +1,4 @@
-use std::cell::RefCell;
-use std::rc::Rc;
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Arc, RwLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use minifb::{Key, Scale, ScaleMode, Window, WindowOptions};
@@ -11,9 +9,9 @@ pub struct Video {
     video_arr: Arc<RwLock<Vec<u8>>>,
 }
 
-const GAME_NAME: &str = "invaders";
-const WIDTH: usize = 256;
-const HEIGHT: usize = 224;
+const GAME_NAME: &str = "Space Invaders";
+const WIDTH: usize = 224;
+const HEIGHT: usize = 256;
 
 impl Video {
     pub fn new(video_arr: Arc<RwLock<Vec<u8>>>) -> Self {
@@ -25,7 +23,7 @@ impl Video {
                 transparency: false,
                 title: true,
                 resize: false,
-                scale: Scale::X2,
+                scale: Scale::X1,
                 scale_mode: ScaleMode::Stretch,
                 topmost: false,
             },
@@ -42,38 +40,45 @@ impl Video {
     /// This is block method
     pub fn start(&mut self) {
         // 限制最高60帧
-        self.window.limit_update_rate(Some(std::time::Duration::from_micros(8600)));
+        self.window.limit_update_rate(Some(std::time::Duration::from_micros(4600)));
 
         let mut lasttime = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
         while self.window.is_open() && !self.window.is_key_down(Key::Escape) {
-            //println!("{:?}", SystemTime::now().duration_since(UNIX_EPOCH).unwrap() - lasttime);
             lasttime = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
-
-
-            self.display();
+            self.set_buffer(self.video_arr.clone());
+            self.window.update_with_buffer(&self.buffer, WIDTH, HEIGHT).unwrap();
         }
     }
 
-    fn display(&mut self) {
-        for i in 0..self.buffer.len() {
-            let line = i / 8;
-            if (i % 8) != 0 { continue; }
-            let byte = self.video_arr.read().unwrap()[line as usize];
-            self.buffer[i] = get_color(byte & 0b0000_0001);
-            self.buffer[i + 1] = get_color(byte & 0b0000_0010);
-            self.buffer[i + 2] = get_color(byte & 0b0000_0100);
-            self.buffer[i + 3] = get_color(byte & 0b0000_1000);
-            self.buffer[i + 4] = get_color(byte & 0b0001_0000);
-            self.buffer[i + 5] = get_color(byte & 0b0010_0000);
-            self.buffer[i + 6] = get_color(byte & 0b0100_0000);
-            self.buffer[i + 7] = get_color(byte & 0b1000_0000);
+    fn set_buffer(&mut self, video_arr: Arc<RwLock<Vec<u8>>>) {
+        let gpu_ram = video_arr.read().unwrap();
+        for i in 0..gpu_ram.len() {
+            let gpu_byte = gpu_ram[i];
+            // display_point
+            let dp = i * 8;
+            let buffer_size = self.buffer.len();
+            self.set_point(dp, get_color(gpu_byte & 0b0000_0001));
+            self.set_point(dp + 1, get_color(gpu_byte & 0b0000_0010));
+            self.set_point(dp + 2, get_color(gpu_byte & 0b0000_0100));
+            self.set_point(dp + 3, get_color(gpu_byte & 0b0000_1000));
+            self.set_point(dp + 4, get_color(gpu_byte & 0b0001_0000));
+            self.set_point(dp + 5, get_color(gpu_byte & 0b0010_0000));
+            self.set_point(dp + 6, get_color(gpu_byte & 0b0100_0000));
+            self.set_point(dp + 7, get_color(gpu_byte & 0b1000_0000));
         }
-        self.window.update_with_buffer(&self.buffer, WIDTH, HEIGHT).unwrap();
+    }
+
+    fn set_point(&mut self, display_point: usize, color: u32) {
+        let new_x = display_point / HEIGHT;
+        let new_y = HEIGHT - 1 - (display_point % HEIGHT);
+        self.buffer[new_y * WIDTH + new_x] = color;
     }
 }
 
 fn get_color(bit: u8) -> u32 {
     return if bit == 0 { 0 } else { u32::max_value() };
 }
+
+
 
 

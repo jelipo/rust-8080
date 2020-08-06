@@ -40,7 +40,7 @@ fn test_cma() {
     assert_eq!(cpu.register.a, 0xae);
 }
 
-// TODO
+
 #[test]
 fn test_daa() {
     let mem = Rc::new(RefCell::new([0u8; 65536].to_vec()));
@@ -150,7 +150,7 @@ fn test_adc_2() {
     assert_eq!(cpu.register.flag_cy, false);
 }
 
-// TODO
+
 #[test]
 fn test_adc_3() {
     let mem = Rc::new(RefCell::new([0u8; 65536].to_vec()));
@@ -160,7 +160,6 @@ fn test_adc_3() {
     mem.borrow_mut()[0x0000] = 0x8f;
     cpu.next();
     assert_eq!(cpu.register.a, 0x7f);
-    println!("{}", cpu.register.get_flags());
     assert_eq!(cpu.register.get_flags(), 0x12);
 }
 

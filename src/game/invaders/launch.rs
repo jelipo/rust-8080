@@ -1,10 +1,7 @@
 use std::{io, thread};
-use std::borrow::Borrow;
-use std::cell::RefCell;
 use std::fs::File;
 use std::io::Read;
-use std::rc::Rc;
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Arc, RwLock};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use crate::cpu::Cpu;
@@ -29,34 +26,42 @@ impl Launch for InvadersLaunch {
             let addressing = init_address(video_arr_cloned.clone()).unwrap();
             let mut cpu = Cpu::new(Box::new(addressing), 0);
             let mut int_num: bool = false;
-            let cycle_frame: u32 = 333333;
-            let mut cycle_frame_temp: u32 = 0;
-            let mut last_sleep = get_mill_time();
+            let mut time = get_mill_time();
+            let mut int_times = 0;
+            let cycle_max: u32 = 16666;
             loop {
+                let mut cycle_temp: u32 = 0;
                 let first = get_mill_time();
                 loop {
                     let cycle = cpu.next();
-                    cycle_frame_temp += (cycle as u32);
-                    if cycle_frame_temp > cycle_frame {
-                        cycle_frame_temp = 0;
+                    cycle_temp += cycle as u32;
+                    if cycle_temp > cycle_max {
+                        cycle_temp = 0;
                         break;
                     }
                 }
-                thread::sleep(Duration::from_millis(16));
                 let result = cpu.interrupt(if int_num { 0x10 } else { 0x08 });
                 if result {
                     int_num = !int_num;
+                    int_times += 1;
+                    if (get_mill_time() - time) > 10000 {
+                        println!("10 sec : {} fps", int_times);
+                        time = get_mill_time();
+                        int_times = 0;
+                    }
                 }
-                // if cycle_frame_temp > cycle_frame {
-                //     cycle_frame_temp = 0;
-                //     // let last_sleep_times = get_mill_time() - last_sleep;
-                //     // let sleep_time = (16 as u128).wrapping_sub(last_sleep_times);
-                //     // if sleep_time <= 16 {
-                //     //     thread::sleep(Duration::from_millis(16));
-                //     // }
-                //     // last_sleep = get_mill_time();
-                //     thread::sleep(Duration::from_millis(16));
-                // }
+                if result {
+                    loop {
+                        let cycle = cpu.next();
+                        cycle_temp += cycle as u32;
+                        if cycle_temp > cycle_max {
+                            break;
+                        }
+                    }
+                    thread::sleep(Duration::from_millis(16 - (get_mill_time() - first) as u64));
+                } else {
+                    println!("not")
+                }
             }
         });
         let mut video = Video::new(video_arr.clone());
