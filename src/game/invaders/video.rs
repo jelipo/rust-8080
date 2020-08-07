@@ -1,12 +1,14 @@
-use std::sync::{Arc, RwLock};
+
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use minifb::{Key, Scale, ScaleMode, Window, WindowOptions};
+use std::cell::RefCell;
+use std::rc::Rc;
 
 pub struct Video {
     window: Window,
     buffer: Vec<u32>,
-    video_arr: Arc<RwLock<Vec<u8>>>,
+    video_arr: Rc<RefCell<Vec<u8>>>,
 }
 
 const GAME_NAME: &str = "Space Invaders";
@@ -14,7 +16,7 @@ const WIDTH: usize = 224;
 const HEIGHT: usize = 256;
 
 impl Video {
-    pub fn new(video_arr: Arc<RwLock<Vec<u8>>>) -> Self {
+    pub fn new(video_arr: Rc<RefCell<Vec<u8>>>) -> Self {
         let mut window = Window::new(
             format!("{} - Powered by Jelipo", GAME_NAME).as_str(),
             WIDTH, HEIGHT,
@@ -40,7 +42,7 @@ impl Video {
     /// This is block method
     pub fn start(&mut self) {
         // 限制最高60帧
-        self.window.limit_update_rate(Some(std::time::Duration::from_micros(4600)));
+        self.window.limit_update_rate(Some(std::time::Duration::from_micros(16667)));
 
         let mut lasttime = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
         while self.window.is_open() && !self.window.is_key_down(Key::Escape) {
@@ -50,8 +52,13 @@ impl Video {
         }
     }
 
-    fn set_buffer(&mut self, video_arr: Arc<RwLock<Vec<u8>>>) {
-        let gpu_ram = video_arr.read().unwrap();
+    pub fn update(&mut self) {
+        self.set_buffer(self.video_arr.clone());
+        self.window.update_with_buffer(&self.buffer, WIDTH, HEIGHT).unwrap();
+    }
+
+    fn set_buffer(&mut self, video_arr: Rc<RefCell<Vec<u8>>>) {
+        let gpu_ram = video_arr.borrow();
         for i in 0..gpu_ram.len() {
             let gpu_byte = gpu_ram[i];
             // display_point

@@ -1,7 +1,7 @@
-
+use std::cell::RefCell;
+use std::rc::Rc;
 
 use crate::memory::{AddressBus, Memory, ReadOnly, Video, Work};
-use std::sync::{RwLock, Arc};
 
 pub struct SpaceInvadersAddressing {
     read_only_h: ReadOnly,
@@ -47,7 +47,7 @@ impl SpaceInvadersAddressing {
                g_arr: Box<[u8; 2048]>,
                f_arr: Box<[u8; 2048]>,
                e_arr: Box<[u8; 2048]>,
-               video_arr: Arc<RwLock<Vec<u8>>>,
+               video_arr: Rc<RefCell<Vec<u8>>>,
     ) -> Self {
         Self {
             read_only_h: ReadOnly::init(0, h_arr),

@@ -8,30 +8,50 @@ use crate::cpu::Cpu;
 use crate::game::invaders::video::Video;
 use crate::game::Launch;
 use crate::memory::SpaceInvadersAddressing;
+use std::cell::RefCell;
+use std::rc::Rc;
 
 pub struct InvadersLaunch {}
 
 impl Launch for InvadersLaunch {
     fn start(&self) {
         let gpu_ram = vec![0u8; 7168];
-        //let gpu_ram_mut = Rc::new(RefCell::new(gpu_ram));
-        // let arc = Arc::new(RwLock::new(gpu_ram));
-        // //let gpu_ram_rc = Rc::new(gpu_ram);
-        // let arc_cloned = arc.clone();
 
-
-        let video_arr = Arc::new(RwLock::new(gpu_ram));
+        let video_arr = Rc::new(RefCell::new(gpu_ram));
         let video_arr_cloned = video_arr.clone();
-        thread::spawn(move || {
-            let addressing = init_address(video_arr_cloned.clone()).unwrap();
-            let mut cpu = Cpu::new(Box::new(addressing), 0);
-            let mut int_num: bool = false;
-            let mut time = get_mill_time();
-            let mut int_times = 0;
-            let cycle_max: u32 = 16666;
+
+        let addressing = init_address(video_arr_cloned.clone()).unwrap();
+        let mut cpu = Cpu::new(Box::new(addressing), 0);
+        let mut int_num: bool = false;
+        let mut time = get_mill_time();
+        let mut int_times = 0;
+        let cycle_max: u32 = 17476;
+        let max_fps: u8 = 60;
+        let mut fps_temp: u8 = 0;
+        let mut fps_timelinei128 = get_mill_time();
+        let mut video = Video::new(video_arr.clone());
+        //video.start();
+        loop {
+            let mut cycle_temp: u32 = 0;
             loop {
-                let mut cycle_temp: u32 = 0;
-                let first = get_mill_time();
+                let cycle = cpu.next();
+                cycle_temp += cycle as u32;
+                if cycle_temp > cycle_max {
+                    cycle_temp = 0;
+                    break;
+                }
+            }
+            let result = cpu.interrupt(if int_num { 0x10 } else { 0x08 });
+            if result {
+                int_num = !int_num;
+                int_times += 1;
+                if (get_mill_time() - time) > 10000 {
+                    println!("10 sec : {} fps", int_times);
+                    time = get_mill_time();
+                    int_times = 0;
+                }
+            }
+            if result {
                 loop {
                     let cycle = cpu.next();
                     cycle_temp += cycle as u32;
@@ -40,37 +60,40 @@ impl Launch for InvadersLaunch {
                         break;
                     }
                 }
-                let result = cpu.interrupt(if int_num { 0x10 } else { 0x08 });
-                if result {
-                    int_num = !int_num;
-                    int_times += 1;
-                    if (get_mill_time() - time) > 10000 {
-                        println!("10 sec : {} fps", int_times);
-                        time = get_mill_time();
-                        int_times = 0;
+                video.update();
+                fps_temp += 1;
+                let time_now = get_mill_time();
+
+                let i = (time_now - fps_timelinei128) as u16;
+                if fps_temp >= 60 {
+                    if i < 1000 {
+                        let sleep = 1000 - i;
+                        println!("补充睡眠 {}ms", sleep);
+                        thread::sleep(Duration::from_micros(sleep as u64));
                     }
-                }
-                if result {
-                    loop {
-                        let cycle = cpu.next();
-                        cycle_temp += cycle as u32;
-                        if cycle_temp > cycle_max {
-                            break;
-                        }
-                    }
-                    thread::sleep(Duration::from_millis(16 - (get_mill_time() - first) as u64));
+                    println!("重置 {}", time_now);
+                    fps_temp = 0;
+                    fps_timelinei128 = time_now;
                 } else {
-                    println!("not")
+                    let sleep = ((1000 as u16).saturating_sub(i)) / (60 - fps_temp) as u16;
+                    if sleep != 0 {
+                        //println!("睡眠 {}ms", sleep);
+                        thread::sleep(Duration::from_micros(sleep as u64 ));
+                    }
                 }
+            } else {
+                println!("not")
             }
-        });
-        let mut video = Video::new(video_arr.clone());
-        video.start();
+        }
     }
 }
 
 fn get_mill_time() -> u128 {
     SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis()
+}
+
+fn get_micro_time() -> u128 {
+    SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_micros()
 }
 
 impl InvadersLaunch {
@@ -79,7 +102,7 @@ impl InvadersLaunch {
     }
 }
 
-fn init_address(video_arr: Arc<RwLock<Vec<u8>>>) -> io::Result<SpaceInvadersAddressing> {
+fn init_address(video_arr: Rc<RefCell<Vec<u8>>>) -> io::Result<SpaceInvadersAddressing> {
     let mut arr_h = [0u8; 2048];
     let mut h = File::open("./res/invaders.h")?;
     h.read(&mut arr_h)?;
