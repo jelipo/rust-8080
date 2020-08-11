@@ -1,15 +1,16 @@
 use std::{io, thread};
+use std::cell::RefCell;
 use std::fs::File;
 use std::io::Read;
+use std::rc::Rc;
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use crate::cpu::Cpu;
+use crate::game::invaders::gameio::InvadersIO;
 use crate::game::invaders::video::Video;
 use crate::game::Launch;
 use crate::memory::SpaceInvadersAddressing;
-use std::cell::RefCell;
-use std::rc::Rc;
 
 pub struct InvadersLaunch {}
 
@@ -21,7 +22,9 @@ impl Launch for InvadersLaunch {
         let video_arr_cloned = video_arr.clone();
 
         let addressing = init_address(video_arr_cloned.clone()).unwrap();
-        let mut cpu = Cpu::new(Box::new(addressing), 0);
+
+        let io = Rc::new(RefCell::new(InvadersIO::new()));
+        let mut cpu = Cpu::new(Box::new(addressing), 0, io.clone());
         let mut int_num: bool = false;
         let mut time = get_mill_time();
         let mut int_times = 0;
@@ -31,6 +34,7 @@ impl Launch for InvadersLaunch {
         let mut fps_timelinei128 = get_mill_time();
         let mut video = Video::new(video_arr.clone());
         //video.start();
+        let loop_io = io.clone();
         loop {
             let mut cycle_temp: u32 = 0;
             loop {
@@ -60,7 +64,12 @@ impl Launch for InvadersLaunch {
                         break;
                     }
                 }
-                video.update();
+                let key_option = video.update_cycle();
+                match key_option {
+                    Some(key) => loop_io.borrow_mut().set_input_temp(key),
+                    None => loop_io.borrow_mut().clean_temp()
+                }
+
                 fps_temp += 1;
                 let time_now = get_mill_time();
 
@@ -78,7 +87,7 @@ impl Launch for InvadersLaunch {
                     let sleep = ((1000 as u16).saturating_sub(i)) / (60 - fps_temp) as u16;
                     if sleep != 0 {
                         //println!("睡眠 {}ms", sleep);
-                        thread::sleep(Duration::from_micros(sleep as u64 ));
+                        thread::sleep(Duration::from_micros(sleep as u64));
                     }
                 }
             } else {

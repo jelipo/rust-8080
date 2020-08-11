@@ -1,3 +1,4 @@
+mod gameio;
 mod launch;
 mod video;
 

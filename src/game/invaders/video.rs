@@ -1,9 +1,8 @@
-
+use std::cell::RefCell;
+use std::rc::Rc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use minifb::{Key, Scale, ScaleMode, Window, WindowOptions};
-use std::cell::RefCell;
-use std::rc::Rc;
 
 pub struct Video {
     window: Window,
@@ -52,9 +51,22 @@ impl Video {
         }
     }
 
-    pub fn update(&mut self) {
+    pub fn update_cycle(&mut self) -> Option<Key> {
         self.set_buffer(self.video_arr.clone());
         self.window.update_with_buffer(&self.buffer, WIDTH, HEIGHT).unwrap();
+        return if self.window.is_key_down(Key::Left) {
+            Some(Key::Left)
+        } else if self.window.is_key_down(Key::Right) {
+            Some(Key::Right)
+        } else if self.window.is_key_down(Key::Space) {
+            Some(Key::Space)
+        } else if self.window.is_key_down(Key::Enter) {
+            Some(Key::Enter)
+        } else if self.window.is_key_down(Key::C) {
+            Some(Key::C)
+        } else {
+            None
+        };
     }
 
     fn set_buffer(&mut self, video_arr: Rc<RefCell<Vec<u8>>>) {

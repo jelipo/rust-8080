@@ -1,5 +1,8 @@
+use std::cell::RefCell;
 use std::mem;
+use std::rc::Rc;
 
+use crate::cpu::IO;
 use crate::cpu::register::Register;
 use crate::memory::address::AddressBus;
 use crate::util::U16Util;
@@ -9,13 +12,14 @@ pub struct Cpu {
     pub register: Register,
     pub addring: Box<dyn AddressBus>,
     interrupt: bool,
+    io: Rc<RefCell<dyn IO>>,
 }
 
 impl Cpu {
     ///
     /// # Arguments
     /// * `name` - A string slice that holds the name of the person
-    pub fn new(addring: Box<dyn AddressBus>, pc: u16) -> Self {
+    pub fn new(addring: Box<dyn AddressBus>, pc: u16, io: Rc<RefCell<dyn IO>>) -> Self {
         let register = Register {
             a: 0,
             b: 0,
@@ -36,6 +40,7 @@ impl Cpu {
             register,
             addring,
             interrupt: false,
+            io,
         }
     }
 
@@ -773,8 +778,9 @@ impl Cpu {
             0xda => ex_cycle = self.condition_jmp(self.register.flag_cy),
             // IN D8        2                       special
             0xdb => {
-                // eprintln!("未完整实现 {:#04X}", op_code);
-                let _byte = self.get_next_byte();
+                let byte = self.get_next_byte();
+                let mut io = self.io.clone();
+                io.borrow_mut().input(self, byte);
             }
             // CC adr       3                       if CY, CALL adr
             0xdc => ex_cycle = self.condition_call(self.register.flag_cy),
