@@ -3,7 +3,7 @@ use std::rc::Rc;
 
 use crate::memory::{AddressBus, Memory, ReadOnly, Video, Work};
 
-pub struct SpaceInvadersAddressing {
+pub struct InvadersAddressBus {
     read_only_h: ReadOnly,
     read_only_g: ReadOnly,
     read_only_f: ReadOnly,
@@ -13,7 +13,7 @@ pub struct SpaceInvadersAddressing {
     work_ram2: Work,
 }
 
-impl AddressBus for SpaceInvadersAddressing {
+impl AddressBus for InvadersAddressBus {
     fn get_mem(&self, addr: u16) -> u8 {
         let value = match addr {
             0x0000..=0x07ff => self.read_only_h.get(addr),
@@ -42,7 +42,7 @@ impl AddressBus for SpaceInvadersAddressing {
     }
 }
 
-impl SpaceInvadersAddressing {
+impl InvadersAddressBus {
     pub fn new(h_arr: Box<[u8; 2048]>,
                g_arr: Box<[u8; 2048]>,
                f_arr: Box<[u8; 2048]>,

@@ -1,5 +1,5 @@
+pub use invaders::InvadersLaunch;
+pub use launch::Launch;
+
 mod launch;
 mod invaders;
-
-pub use launch::Launch;
-pub use invaders::InvadersLaunch;

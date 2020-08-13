@@ -8,7 +8,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use minifb::{Key, Window, WindowOptions};
 
 use crate::cpu::Cpu;
-use crate::memory::{AddressBus, SpaceInvadersAddressing, TestAddressing};
+use crate::memory::{AddressBus, TestAddressing};
 use crate::game::{InvadersLaunch, Launch};
 
 mod util;

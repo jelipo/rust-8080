@@ -4,7 +4,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use minifb::{Key, Scale, ScaleMode, Window, WindowOptions};
 
-pub struct Video {
+pub struct Display {
     window: Window,
     buffer: Vec<u32>,
     video_arr: Rc<RefCell<Vec<u8>>>,
@@ -14,7 +14,7 @@ const GAME_NAME: &str = "Space Invaders";
 const WIDTH: usize = 224;
 const HEIGHT: usize = 256;
 
-impl Video {
+impl Display {
     pub fn new(video_arr: Rc<RefCell<Vec<u8>>>) -> Self {
         let mut window = Window::new(
             format!("{} - Powered by Jelipo", GAME_NAME).as_str(),

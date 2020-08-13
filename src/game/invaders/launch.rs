@@ -8,9 +8,10 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use crate::cpu::Cpu;
 use crate::game::invaders::gameio::InvadersIO;
-use crate::game::invaders::video::Video;
+use crate::game::invaders::display::Display;
 use crate::game::Launch;
-use crate::memory::SpaceInvadersAddressing;
+use crate::game::invaders::InvadersAddressBus;
+
 
 pub struct InvadersLaunch {}
 
@@ -32,7 +33,7 @@ impl Launch for InvadersLaunch {
         let max_fps: u8 = 60;
         let mut fps_temp: u8 = 0;
         let mut fps_timelinei128 = get_mill_time();
-        let mut video = Video::new(video_arr.clone());
+        let mut video = Display::new(video_arr.clone());
         //video.start();
         let loop_io = io.clone();
         loop {
@@ -111,7 +112,7 @@ impl InvadersLaunch {
     }
 }
 
-fn init_address(video_arr: Rc<RefCell<Vec<u8>>>) -> io::Result<SpaceInvadersAddressing> {
+fn init_address(video_arr: Rc<RefCell<Vec<u8>>>) -> io::Result<InvadersAddressBus> {
     let mut arr_h = [0u8; 2048];
     let mut h = File::open("./res/invaders.h")?;
     h.read(&mut arr_h)?;
@@ -128,7 +129,7 @@ fn init_address(video_arr: Rc<RefCell<Vec<u8>>>) -> io::Result<SpaceInvadersAddr
     let mut e = File::open("./res/invaders.e")?;
     e.read(&mut arr_e)?;
 
-    let addressing = SpaceInvadersAddressing::new(
+    let addressing = InvadersAddressBus::new(
         Box::new(arr_h), Box::new(arr_g), Box::new(arr_f), Box::new(arr_e), video_arr);
     Ok(addressing)
 }
